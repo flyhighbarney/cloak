@@ -36,12 +36,14 @@ budgets:
     daily_requests: 1000    # generous starter tier
 
 dlp:
+  # Default posture: tokenize personal data so the round-trip works
+  # transparently. Credentials still block outright.
   default: redact
   actions:
-    ssn: block            # US SSNs never leave your network
-    credit_card: block    # never send card data to a cloud LLM
+    ssn: redact           # tokenize + restore on response
+    credit_card: redact   # tokenize + restore on response
     email: redact         # tokenize + restore on response
-    api_key: block        # secrets never leave
+    api_key: block        # credentials never leave the network
     private_key: block
     aws_key: block
     github_token: block

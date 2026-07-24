@@ -11,17 +11,31 @@ schema_version: v1.0
 # api_key, private_key, github_token, aws_key, or any_pii for the default.
 #
 # Rules in this file OVERRIDE the dlp/injection sections in pipeline.yaml.
+#
+# Default posture: "paste anything, we tokenize" for PII (safe round-trip
+# via the session vault). Credentials stay at block — a leaked credential
+# is unrecoverable damage.
 
 rules:
-  - name: "Block US SSNs — HIPAA / state privacy laws"
+  # ---- Personal data: tokenize + restore on the response ----
+  - name: "Tokenize US SSNs (round-trip via session vault)"
     if: detects ssn
-    then: block
+    then: redact
 
-  - name: "Block credit card numbers — PCI DSS"
+  - name: "Tokenize credit card numbers"
     if: detects credit_card
-    then: block
+    then: redact
 
-  - name: "Block API keys and secrets — prevents credential theft"
+  - name: "Tokenize emails"
+    if: detects email
+    then: redact
+
+  - name: "Tokenize everything else that looks like PII"
+    if: detects any_pii
+    then: redact
+
+  # ---- Credentials: never leave the network. Blocked outright. ----
+  - name: "Block API keys and secrets"
     if: detects api_key
     then: block
 
@@ -37,14 +51,7 @@ rules:
     if: detects private_key
     then: block
 
-  - name: "Redact emails — safe to send with tokenization"
-    if: detects email
-    then: redact
-
-  - name: "Redact everything else that looks like PII"
-    if: detects any_pii
-    then: redact
-
-  - name: "Block obvious prompt injections"
+  # ---- Guardrail against obvious model manipulation ----
+  - name: "Block obvious model manipulation"
     if: injection_score >= 50
     then: block
