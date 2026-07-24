@@ -14,7 +14,6 @@ import (
 	"policyd/internal/obs/log"
 	"policyd/internal/obs/meter"
 	"policyd/internal/stage/dlptier1"
-	"policyd/internal/stage/injection"
 	"policyd/internal/vault/session"
 )
 
@@ -92,6 +91,15 @@ func (e *Engine) Handle(ctx context.Context, r *api.Request) (resp *api.Response
 
 	if err := checkModes(e.levels, r.Mode); err != nil {
 		return nil, err
+	}
+
+	// Assign identifiers before the vault opens — normalize does this too,
+	// but the vault must be Open before any stage runs, so seed here.
+	if r.ID == "" {
+		r.ID = api.RequestID(newRandID(16))
+	}
+	if r.Session == "" {
+		r.Session = api.SessionID(newRandID(16))
 	}
 
 	// Vault must be Open before DLP tokenizes.

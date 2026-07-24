@@ -177,7 +177,10 @@ var (
 	}
 
 	// Newline and other control characters that could enable log-injection.
-	ctrlRe = regexp.MustCompile(`[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`)
+	// Intentionally includes 0x09 (tab), 0x0a (LF), 0x0d (CR) — allowing any
+	// of those to reach the log line breaks JSON parsing and enables
+	// log-injection where user input becomes a fake log record.
+	ctrlRe = regexp.MustCompile(`[\x00-\x1f\x7f]`)
 )
 
 // redactValue applies field-level redaction based on the field name.
@@ -216,14 +219,22 @@ func redactSecret(v any) string {
 		len(s), hex.EncodeToString(h[:4]))
 }
 
-// sanitize strips control characters that would break log-line parsing or
-// enable log injection attacks.
+// sanitize strips control characters and rewrites anything that looks like
+// an API key (any provider — sk-*, sk-ant-*, sk-fake-*, xoxb-, AKIA-, ghp_,
+// github_pat_) into a redacted placeholder. Defense-in-depth against
+// providers that echo the caller's key inside error responses.
 func sanitize(s string) string {
 	if len(s) > 1024 {
 		s = s[:1024] + "…"
 	}
-	return ctrlRe.ReplaceAllString(s, " ")
+	s = ctrlRe.ReplaceAllString(s, " ")
+	s = secretInStringRe.ReplaceAllString(s, "<redacted-secret>")
+	return s
 }
+
+var secretInStringRe = regexp.MustCompile(
+	`sk-[A-Za-z0-9_-]{6,}|AKIA[0-9A-Z]{16}|(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}|xox[bpars]-[A-Za-z0-9-]{10,}`,
+)
 
 // RedactBody produces a body-safe reference: length and content hash only.
 func RedactBody(body []byte) string {

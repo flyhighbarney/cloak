@@ -83,7 +83,9 @@ func (e *Engine) Eval(ctx context.Context, p api.Policy, env api.PolicyEnv) (api
 	if !ok {
 		return api.PolicyResult{}, fmt.Errorf("%w: policy not from this engine", api.ErrPolicyBlocked)
 	}
-	out, _, err := cp.prg.ContextEval(ctx, env)
+	// cel-go's ContextEval rejects named map types; feed it the underlying map.
+	activation := map[string]any(env)
+	out, _, err := cp.prg.ContextEval(ctx, activation)
 	if err != nil {
 		return api.PolicyResult{}, fmt.Errorf("eval %s: %w", cp.id, err)
 	}

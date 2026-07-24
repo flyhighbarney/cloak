@@ -19,7 +19,6 @@ import (
 	"policyd/internal/adminui"
 	"policyd/internal/api"
 	"policyd/internal/audit"
-	"policyd/internal/auth"
 	"policyd/internal/config"
 	"policyd/internal/engine"
 	"policyd/internal/httpclient"

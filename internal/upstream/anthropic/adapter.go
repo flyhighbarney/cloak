@@ -115,8 +115,10 @@ func (a *Adapter) Send(ctx context.Context, r *api.Request) (*api.Response, erro
 	}
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		buf, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		return nil, fmt.Errorf("%w: status %d: %s", api.ErrProvider, resp.StatusCode, string(buf))
+		// Avoid echoing the provider's error body — it may include the API
+		// key we sent (Anthropic mirrors it in some 401 responses).
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		return nil, fmt.Errorf("%w: status %d", api.ErrProvider, resp.StatusCode)
 	}
 
 	if r.Mode == api.ModeStreaming {

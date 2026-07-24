@@ -114,8 +114,11 @@ func (a *Adapter) Send(ctx context.Context, r *api.Request) (*api.Response, erro
 	}
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		buf, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		return nil, fmt.Errorf("%w: status %d: %s", api.ErrProvider, resp.StatusCode, string(buf))
+		// Deliberately do NOT include the response body — providers commonly
+		// echo the supplied API key back in the error text, which would leak
+		// through logs.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		return nil, fmt.Errorf("%w: status %d", api.ErrProvider, resp.StatusCode)
 	}
 
 	if r.Mode == api.ModeStreaming {

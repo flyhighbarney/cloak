@@ -21,3 +21,23 @@ providers:
   #   cost_per_1k_in: 3.00
   #   cost_per_1k_out: 15.00
   #   local: false
+
+  # OFFLINE MODE — Ollama on localhost.
+  # Ollama exposes an OpenAI-compatible endpoint at /v1/chat/completions,
+  # so we register it as kind: openai with local: true so the SSRF client
+  # permits loopback. No cloud API key needed; Ollama ignores the header
+  # but we still populate api_key_env with a dummy so config validation passes.
+  #
+  # Install Ollama:  https://ollama.com/download
+  # Pull a model:    ollama pull llama3.2
+  # Set env var:     export OLLAMA_API_KEY=unused
+  #
+  # - id: ollama-local
+  #   kind: openai
+  #   base_url: http://localhost:11434
+  #   api_key_env: OLLAMA_API_KEY
+  #   model: llama3.2
+  #   max_context: 8192
+  #   cost_per_1k_in: 0.0
+  #   cost_per_1k_out: 0.0
+  #   local: true

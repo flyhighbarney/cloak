@@ -110,18 +110,18 @@ func (s *Stage) Run(ctx context.Context, r *api.Request, bus api.SignalBus) erro
 func builtinRules() []Rule {
 	return []Rule{
 		// Direct override attempts — high confidence.
-		{ID: "override.ignore_previous", Weight: 45, Regex: regexp.MustCompile(`\b(ignore|disregard|forget)\b[^.!?\n]{0,40}\b(previous|prior|earlier|above|all)\b[^.!?\n]{0,40}\b(instructions?|prompts?|rules?|directives?|context)\b`)},
+		{ID: "override.ignore_previous", Weight: 50, Regex: regexp.MustCompile(`\b(ignore|disregard|forget)\b[^.!?\n]{0,40}\b(previous|prior|earlier|above|all)\b[^.!?\n]{0,40}\b(instructions?|prompts?|rules?|directives?|context)\b`)},
 		{ID: "override.new_instructions", Weight: 40, Regex: regexp.MustCompile(`\b(new|following|updated)\s+instructions?\b[^.!?\n]{0,40}\b(replace|override|supersede)\b`)},
-		{ID: "override.role_override", Weight: 40, Regex: regexp.MustCompile(`\byou\s+are\s+(now|actually|really)\s+(a|an|the)\s+\w+`)},
+		{ID: "override.role_override", Weight: 40, Regex: regexp.MustCompile(`\byou\s+are\s+(now|actually|really)\s+(a|an|the)?\s*\w+`)},
 
 		// System-prompt exfiltration.
-		{ID: "exfil.reveal_system", Weight: 45, Regex: regexp.MustCompile(`\b(reveal|show|print|display|output|repeat|dump)\b[^.!?\n]{0,40}\b(system|initial|hidden|secret|internal)\b[^.!?\n]{0,40}\b(prompts?|instructions?|messages?|rules?)\b`)},
+		{ID: "exfil.reveal_system", Weight: 50, Regex: regexp.MustCompile(`\b(reveal|show|print|display|output|repeat|dump)\b[^.!?\n]{0,40}\b(system|initial|hidden|secret|internal)\b[^.!?\n]{0,40}\b(prompts?|instructions?|messages?|rules?)\b`)},
 		{ID: "exfil.what_are_your_instructions", Weight: 35, Regex: regexp.MustCompile(`\bwhat\s+(are|were)\s+your\s+(original|initial|system|hidden)\b`)},
-		{ID: "exfil.verbatim", Weight: 40, Regex: regexp.MustCompile(`\brepeat\b[^.!?\n]{0,40}\b(verbatim|word\s*for\s*word|exactly)\b[^.!?\n]{0,60}\b(above|prompt|instructions?)\b`)},
+		{ID: "exfil.verbatim", Weight: 40, Regex: regexp.MustCompile(`\b(repeat|print)\b[^.!?\n]{0,40}\b(verbatim|word\s*for\s*word|exactly)\b`)},
 
 		// Known jailbreak framing.
 		{ID: "jailbreak.dan", Weight: 40, Regex: regexp.MustCompile(`\b(do\s+anything\s+now|dan\s+mode|developer\s+mode|jailbroken?)\b`)},
-		{ID: "jailbreak.pretend", Weight: 25, Regex: regexp.MustCompile(`\b(pretend|imagine|roleplay|role-play)\b[^.!?\n]{0,40}\b(no\s+(rules|restrictions|filters|guidelines)|without\s+(rules|restrictions|filters|guidelines))\b`)},
+		{ID: "jailbreak.pretend", Weight: 50, Regex: regexp.MustCompile(`\b(pretend|imagine|roleplay|role-play)\b[^.!?\n]{0,40}\b(no\s+(rules|restrictions|filters|guidelines)|without\s+(rules|restrictions|filters|guidelines))\b`)},
 		{ID: "jailbreak.hypothetical_evil", Weight: 30, Regex: regexp.MustCompile(`\b(hypothetical(?:ly)?|for\s+educational\s+purposes)\b[^.!?\n]{0,80}\b(illegal|harmful|dangerous|malicious|weapon|exploit)\b`)},
 
 		// Delimiter smuggling.

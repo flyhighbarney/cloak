@@ -30,20 +30,29 @@ func (r *Router) Select(ctx context.Context, req *api.Request, snap api.RouteSna
 	}
 	env := buildEnv(req, snap)
 	var trace []api.PolicyRuleID
+	var lastEvalErr error
+	var lastValueType string
 	for _, p := range r.policies {
 		res, err := r.engine.Eval(ctx, p, env)
 		trace = append(trace, p.ID())
 		if err != nil {
+			lastEvalErr = err
 			continue // try next policy
 		}
+		lastValueType = fmt.Sprintf("%T", res.Value)
 		up, reason, ok := interpret(res.Value, snap)
 		if !ok {
 			continue
 		}
 		return api.RouteDecision{Upstream: up, Reason: reason, Trace: trace}, nil
 	}
+	if lastEvalErr != nil {
+		return api.RouteDecision{Trace: trace},
+			fmt.Errorf("%w: policy eval err=%v", api.ErrCapMismatch, lastEvalErr)
+	}
 	return api.RouteDecision{Trace: trace},
-		fmt.Errorf("%w: no policy produced a valid upstream", api.ErrCapMismatch)
+		fmt.Errorf("%w: no policy produced a valid upstream (last value type: %s)",
+			api.ErrCapMismatch, lastValueType)
 }
 
 func buildEnv(r *api.Request, snap api.RouteSnapshot) api.PolicyEnv {
