@@ -35,7 +35,34 @@ cloakline is a local-first AI security gateway that sits between your developmen
 
 ## 2. Installation
 
-### 2a. Build from source
+### 2a. One-command install (recommended)
+
+From a fresh clone, run:
+
+```powershell
+.\scripts\bootstrap.ps1
+```
+
+That's it. The script:
+
+1. **Self-elevates** — pops one UAC prompt to run as Administrator
+2. **Builds** both binaries with `go build`
+3. **Trusts the local inspection CA** — Windows shows one security dialog; click **Yes**
+4. **Configures** `configs\pipeline.yaml` (flips inspect on, sets listen to `:443`)
+5. **Registers a scheduled task** to run cloakline as your user at login
+6. **Starts the task** and verifies cloakline is listening on `:443`
+7. **Adds hosts-file entries** for `api.anthropic.com` and `api.openai.com`
+8. **Verifies DNS** actually resolves those to `127.0.0.1` before declaring success
+
+If any step fails, the hosts file is rolled back automatically so nothing is left in a half-installed state.
+
+Flags:
+- `-SkipBuild` — use the existing `bin\*.exe` files instead of running `go build`
+- `-SkipTrust` — skip the CA install (assume it's already trusted)
+
+Requirements: Go 1.22+ on PATH (unless you use `-SkipBuild`).
+
+### 2b. Manual install (if you prefer step-by-step)
 
 ```bash
 # Clone the repo
@@ -51,7 +78,7 @@ go build -trimpath -o ./bin/cloak.exe    ./cmd/cloak
 
 The two binaries are self-contained — no runtime dependencies.
 
-### 2b. One-time setup (run once per machine)
+### 2c. Interactive setup wizard
 
 ```bash
 ./bin/cloak.exe setup
@@ -68,7 +95,7 @@ The two binaries are self-contained — no runtime dependencies.
 
 After setup, optionally choose to add a startup shortcut so cloakline runs on login.
 
-### 2c. Hosts file (required for TLS interception)
+### 2d. Hosts file (required for TLS interception)
 
 Open Notepad as Administrator and edit `C:\Windows\System32\drivers\etc\hosts`. Add:
 
@@ -81,7 +108,7 @@ Then in `configs/pipeline.yaml`, set `inspect.listen: ":443"` and start cloaklin
 
 > **Why is this needed?** These entries redirect AI-provider hostnames to your local machine. cloakline terminates the TLS connection, inspects the body, and forwards to the real provider using its own connection. Without this step, your tools talk to providers directly and cloakline cannot see the traffic.
 
-### 2d. Start the daemon
+### 2e. Start the daemon
 
 ```bash
 ./bin/cloakline.exe --config ./configs

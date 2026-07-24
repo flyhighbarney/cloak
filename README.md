@@ -8,15 +8,27 @@ A local-first AI security gateway. Drop-in OpenAI / Anthropic compatible. Redact
 
 ## The 60-second install
 
-```bash
-# 1. Scan a file for anything you shouldn't paste into ChatGPT (offline, no server needed):
-cloak scan contract.docx
+**Windows — one command from a fresh clone:**
 
-# 2. Point any OpenAI/Anthropic SDK at your gateway:
+```powershell
+git clone https://github.com/flyhighbarney/cloakline.git
+cd cloakline
+.\scripts\bootstrap.ps1
+```
+
+That script self-elevates, builds both binaries, trusts the local CA, registers cloakline as a scheduled task, adds the two hosts-file entries, and verifies the daemon is listening before it declares success. Requires Go 1.22+ on PATH. Full walkthrough and manual steps in [docs/GUIDE.md](docs/GUIDE.md).
+
+**Or — no daemon needed, just scan a file offline:**
+
+```bash
+cloak scan contract.docx
+```
+
+**Or — point any OpenAI/Anthropic SDK at a shared team gateway:**
+
+```bash
 export OPENAI_BASE_URL=https://gateway.your-company.com/v1
 export OPENAI_API_KEY=sk-gw-your-team-key
-
-# 3. Keep coding. Now you can't leak your client's data.
 ```
 
 That's the whole product.
