@@ -101,12 +101,13 @@ Required for the product to be trustable. Every item here is a gate on selling t
 
 ### 2.1 Secrets handling
 
-- [ ] Real cloud API keys never appear in logs. **Automated grep test in CI.**
-- [ ] Real cloud API keys never appear in metrics or dimension labels.
-- [ ] Real cloud API keys are read from environment variables only; never from git-tracked files.
-- [ ] Virtual keys are stored hashed (SHA-256) in principals.yaml; plaintext discarded after issuance.
-- [ ] Authorization header value is redacted in every log line (`<redacted len=N sha256-first-8=XXXX>`).
-- [ ] Any header matching `(?i)(key|token|secret|cookie|auth)` is redacted in logs.
+- [x] Real cloud API keys never appear in logs. Default log redaction covers `Authorization`, `x-api-key`, and any header matching `(?i)(key|token|secret|cookie|auth)`. **Automated grep test in CI: not yet wired.**
+- [x] Real cloud API keys never appear in metrics or dimension labels. Fixed dimension vocabulary in `internal/obs/meter/names.go`.
+- [x] Real cloud API keys are read from environment variables only; never from git-tracked files. Config loader refuses `api_key: ...` inline in `providers.yaml`.
+- [x] Virtual keys are stored hashed (SHA-256) in `auth.Store`; plaintext accepted only during registration.
+- [x] Authorization header value is redacted in every log line (`<redacted len=N sha256-first-8=XXXX>`).
+- [x] Any header matching `(?i)(key|token|secret|cookie|auth)` is redacted in logs.
+- [x] `.gitignore` prevents accidental commit of `.env`, `.env.*`, `*.pem`, `*.key`, `*_rsa`, `*_ed25519`, `credentials.json`.
 
 ### 2.2 Outbound network safety
 
@@ -263,9 +264,10 @@ Every item costs $0/mo until first paying customer.
 - [ ] **Observability.** Grafana Cloud free tier (10k series, 14-day retention). Set up as a Prometheus scrape target of the gateway's `/metrics`.
 - [ ] **Uptime monitoring.** BetterStack free tier or UptimeRobot free tier — one monitor on `/healthz`.
 - [ ] **Error tracking.** Sentry free tier (5k events/mo) OR just structured logs to Grafana Loki free tier.
-- [ ] **Git hosting.** GitHub free.
-- [ ] **CI.** GitHub Actions free tier (2000 min/mo — plenty).
-- [ ] **Container registry.** GitHub Container Registry free for public images.
+- [x] **Git hosting.** GitHub free — [github.com/flyhighbarney/policyd](https://github.com/flyhighbarney/policyd) (private).
+- [x] **`.gitignore` in place.** Excludes `.env`, private keys (`*.pem`, `*.key`, `*_rsa`, `*_ed25519`), build artifacts, IDE files, OS junk. Only `.env.example` is tracked.
+- [ ] **CI.** GitHub Actions free tier (2000 min/mo — plenty). Not yet wired.
+- [ ] **Container registry.** GitHub Container Registry free for public images. Not yet wired.
 
 ### 4.2 Deployment recipe
 
@@ -291,6 +293,7 @@ Every item costs $0/mo until first paying customer.
 - [ ] Privacy policy (free template — auto-generated from termsfeed.com or similar). Say honestly: "we relay prompts to OpenAI/Anthropic; we redact PII before relay; we retain audit metadata only; we do not train on your data."
 - [ ] Terms of service.
 - [ ] `SECURITY.md` in the repo with a security contact email.
+  - Repo lives at [github.com/flyhighbarney/policyd](https://github.com/flyhighbarney/policyd) (private) — add before flipping public.
 - [ ] A public status page (statuspage.io free? Grafana `stat panels` shared publicly?).
 
 ### 4.5 Support surface
