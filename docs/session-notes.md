@@ -160,3 +160,30 @@ That restores Claude Code to normal.
 The system works end-to-end today: labelled password paste in Claude Code triggers the y/n prompt, `y` forwards the original, `n` cancels. The safety-critical thing is the installer rollback — the previous incident where hosts got polluted without a listener taught us that ordering matters more than cleverness. If you touch install.ps1, keep the "verify before adding hosts" invariant.
 
 Everything with a bug number above is a real thing to fix. Order-of-attack recommendation: (7) provider auto-skip → (4) session opt-out semantics → (2) history rewrite → (3) OpenAI gate → (5+6) prefs mutex + cache → (1) session key → (8) zeroize race.
+
+## Backup + failsafe systems (automatic, no user action)
+
+Both run unattended — the user never invokes anything.
+
+### Runtime failsafe (`internal/tlsinspect/server.go`)
+- `serveWithFailsafe` wraps every request in `recover()`. A panic in any
+  pipeline stage NEVER crashes the daemon (a dead listener = dead 127.0.0.1:443
+  port = every AI client on the machine bricked).
+- On panic *before* any response bytes are written, it **fails open**: replays
+  the untouched buffered request to the real upstream via `Handler.FailOpen`
+  (→ `forwardPassthrough`). The user's request still succeeds, uninspected.
+- On panic *after* a partial write, it only logs (can't retry a half-sent
+  response) — but the process still survives.
+- Extracted as a free function taking `handle`/`failOpen` callbacks so it's
+  unit-tested with fakes, no network. See `failsafe_test.go`.
+
+### State backup (`internal/backup/`, wired in `cmd/cloakline/main.go:autoBackup`)
+- On every daemon boot, `backup.Auto` zips the state dir (vault + prefs + CA),
+  `configs/pipeline.yaml`, `configs/providers.yaml`, and a copy of the OS hosts
+  file into `%APPDATA%\cloakline\backups\backup-<UTC>.zip`, keeping the newest 10.
+- Best-effort: any failure is warn-logged and swallowed — a backup problem can
+  never stop cloakline booting.
+- `backup.Restore` extracts with a zip-slip guard. Round-trip + rotation +
+  zip-slip covered by `backup_test.go`.
+- Complements `scripts/panic-restore.ps1` (emergency *unwind*); backups are the
+  emergency *recover*.
