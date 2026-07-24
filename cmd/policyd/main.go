@@ -27,6 +27,7 @@ import (
 	"policyd/internal/obs/meter"
 	policycel "policyd/internal/policy/cel"
 	routercel "policyd/internal/router/cel"
+	"policyd/internal/stage/budget"
 	"policyd/internal/stage/dlptier1"
 	"policyd/internal/stage/extracttext"
 	"policyd/internal/stage/injection"
@@ -186,8 +187,17 @@ func run() error {
 		Default: ir.DLP.Default,
 		ByKind:  ir.DLP.ByKind,
 	}
+
+	// Budget store — one shared instance across all requests.
+	budgetLimits := make(map[api.BudgetRef]budget.Limits, len(ir.Budgets))
+	for ref, b := range ir.Budgets {
+		budgetLimits[ref] = budget.Limits{DailyRequests: b.DailyRequests}
+	}
+	budgetStore := budget.NewStore(budgetLimits)
+
 	stages := []api.Stage{
 		normalize.New(),
+		budget.New(budgetStore), // pre-flight — cheap to enforce before scans
 		extracttext.New(),
 		// DLP and injection detection are independent — engine runs them
 		// concurrently (they both only depend on extract.text).
@@ -205,15 +215,17 @@ func run() error {
 	// Transport (constructed early so we can version-check).
 	metricsHandler := promhttp.HandlerFor(promReg, promhttp.HandlerOpts{})
 	transport := httpxport.New(httpxport.Config{
-		Listen:         ir.Listen,
-		AdminListen:    ir.AdminListen,
-		MaxBodyBytes:   ir.MaxBodyBytes,
-		RequestTimeout: ir.RequestTimeout,
-		Auth:           authStore,
-		Logger:         logger,
-		Meter:          m,
-		MetricsHandler: metricsHandler,
-		AdminHandler:   adminHandler,
+		Listen:             ir.Listen,
+		AdminListen:        ir.AdminListen,
+		MaxBodyBytes:       ir.MaxBodyBytes,
+		RequestTimeout:     ir.RequestTimeout,
+		Auth:               authStore,
+		Logger:             logger,
+		Meter:              m,
+		MetricsHandler:     metricsHandler,
+		AdminHandler:       adminHandler,
+		RateLimitPerSecond: ir.RateLimit.PerSecond,
+		RateLimitBurst:     ir.RateLimit.Burst,
 	})
 
 	// Version invariants — loud failure if anything is out of range.

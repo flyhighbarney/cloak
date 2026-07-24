@@ -24,6 +24,17 @@ injection:
   # Default: 50 (single strong rule OR two moderate rules will block).
   threshold: 50
 
+# Per-key rate limit. Zero disables. Token bucket algorithm.
+rate_limit:
+  requests_per_second: 10
+  burst: 20
+
+# Per-budget-ref daily request caps. Reset at UTC midnight.
+# Principals reference these via principals.yaml → budget_ref.
+budgets:
+  default:
+    daily_requests: 1000    # generous starter tier
+
 dlp:
   default: redact
   actions:

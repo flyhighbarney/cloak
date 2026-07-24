@@ -1,0 +1,101 @@
+{
+  "name": "policyd-guard",
+  "displayName": "policyd Guard",
+  "description": "Real-time detection of PII, secrets, and API keys before you send them to ChatGPT, Claude, or Copilot.",
+  "version": "0.1.0",
+  "publisher": "policyd",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/flyhighbarney/policyd",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flyhighbarney/policyd.git",
+    "directory": "vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/flyhighbarney/policyd/issues"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "security",
+    "dlp",
+    "ai",
+    "openai",
+    "anthropic",
+    "prompt injection",
+    "pii",
+    "secrets",
+    "compliance"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "policyd.scanCurrentFile",
+        "title": "policyd: Scan Current File",
+        "category": "policyd"
+      },
+      {
+        "command": "policyd.scanSelection",
+        "title": "policyd: Scan Selection",
+        "category": "policyd"
+      },
+      {
+        "command": "policyd.showFindings",
+        "title": "policyd: Show Recent Findings",
+        "category": "policyd"
+      },
+      {
+        "command": "policyd.configure",
+        "title": "policyd: Configure Gateway",
+        "category": "policyd"
+      }
+    ],
+    "configuration": {
+      "title": "policyd",
+      "properties": {
+        "policyd.gatewayUrl": {
+          "type": "string",
+          "default": "",
+          "description": "URL of your policyd gateway (leave empty to skip gateway features)."
+        },
+        "policyd.scanOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan files for PII and secrets when they're saved."
+        },
+        "policyd.scanOnType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan files while you type (debounced 500ms)."
+        },
+        "policyd.severity": {
+          "type": "string",
+          "enum": ["error", "warning", "information"],
+          "default": "warning",
+          "description": "Severity level of policyd diagnostics."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.0",
+    "@vscode/vsce": "^2.24.0"
+  }
+}

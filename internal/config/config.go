@@ -18,6 +18,7 @@ import (
 
 	"policyd/internal/api"
 	"policyd/internal/auth"
+	"policyd/internal/policy/dsl"
 )
 
 const (
@@ -58,6 +59,19 @@ type IR struct {
 	Principals    []PrincipalIR
 	Policies      []PolicyIR
 	Pipeline      PipelineIR
+	Budgets       map[api.BudgetRef]BudgetIR
+	RateLimit     RateLimitIR
+}
+
+// BudgetIR describes a per-budget-ref daily limit set.
+type BudgetIR struct {
+	DailyRequests int
+}
+
+// RateLimitIR describes the per-key rate limit.
+type RateLimitIR struct {
+	PerSecond float64
+	Burst     float64
 }
 
 // DLPIR is the compiled DLP configuration.
@@ -108,16 +122,18 @@ type PipelineIR struct {
 // -------- YAML shapes --------
 
 type pipelineFile struct {
-	SchemaVersion     string             `yaml:"schema_version"`
-	Env               Env                `yaml:"env"`
-	Security          SecurityMode       `yaml:"security"`
-	Listen            string             `yaml:"listen"`
-	AdminListen       string             `yaml:"admin_listen"`
-	MaxBodyBytes      int64              `yaml:"max_body_bytes"`
-	RequestTimeoutSec int                `yaml:"request_timeout_seconds"`
-	Stages            []string           `yaml:"stages"`
-	DLP               *dlpSection        `yaml:"dlp"`
-	Injection         *injectionSection  `yaml:"injection"`
+	SchemaVersion     string                     `yaml:"schema_version"`
+	Env               Env                        `yaml:"env"`
+	Security          SecurityMode               `yaml:"security"`
+	Listen            string                     `yaml:"listen"`
+	AdminListen       string                     `yaml:"admin_listen"`
+	MaxBodyBytes      int64                      `yaml:"max_body_bytes"`
+	RequestTimeoutSec int                        `yaml:"request_timeout_seconds"`
+	Stages            []string                   `yaml:"stages"`
+	DLP               *dlpSection                `yaml:"dlp"`
+	Injection         *injectionSection          `yaml:"injection"`
+	Budgets           map[string]budgetEntry     `yaml:"budgets"`
+	RateLimit         *rateLimitSection          `yaml:"rate_limit"`
 }
 
 type dlpSection struct {
@@ -127,6 +143,15 @@ type dlpSection struct {
 
 type injectionSection struct {
 	Threshold int `yaml:"threshold"`
+}
+
+type budgetEntry struct {
+	DailyRequests int `yaml:"daily_requests"`
+}
+
+type rateLimitSection struct {
+	RequestsPerSecond float64 `yaml:"requests_per_second"`
+	Burst             float64 `yaml:"burst"`
 }
 
 type providersFile struct {
@@ -271,6 +296,32 @@ func Load(dir string) (*IR, error) {
 	}
 	if ir.Injection.Threshold <= 0 {
 		ir.Injection.Threshold = 50
+	}
+
+	// Budgets.
+	ir.Budgets = make(map[api.BudgetRef]BudgetIR, len(pf.Budgets))
+	for name, b := range pf.Budgets {
+		ir.Budgets[api.BudgetRef(name)] = BudgetIR{DailyRequests: b.DailyRequests}
+	}
+
+	// Rate limit.
+	if pf.RateLimit != nil {
+		ir.RateLimit.PerSecond = pf.RateLimit.RequestsPerSecond
+		ir.RateLimit.Burst = pf.RateLimit.Burst
+	}
+
+	// Optional rules.yaml DSL overlay. When present, its DLP action + injection
+	// threshold overrides win over pipeline.yaml values.
+	rulesPath := filepath.Join(dir, "rules.yaml")
+	if buf, rerr := readCappedIfExists(rulesPath); rerr != nil {
+		return nil, rerr
+	} else if buf != nil {
+		compiled, cerr := dsl.Compile(buf)
+		if cerr != nil {
+			return nil, fmt.Errorf("rules.yaml: %w", cerr)
+		}
+		ir.DLP.ByKind, ir.DLP.Default, ir.Injection.Threshold = dsl.Merge(
+			ir.DLP.ByKind, ir.DLP.Default, ir.Injection.Threshold, compiled)
 	}
 
 	// Providers.
@@ -445,6 +496,15 @@ func readCapped(path string) ([]byte, error) {
 		return nil, fmt.Errorf("%w: %s exceeds %d bytes", api.ErrConfigInvalid, path, MaxFileSize)
 	}
 	return buf, nil
+}
+
+// readCappedIfExists is like readCapped but returns (nil, nil) if the file
+// does not exist. Used for optional overlay files (rules.yaml).
+func readCappedIfExists(path string) ([]byte, error) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return readCapped(path)
 }
 
 func strictYAML(b []byte, dst any) error {

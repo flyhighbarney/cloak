@@ -35,6 +35,10 @@ type Config struct {
 	Meter          api.Meter
 	MetricsHandler http.Handler // for /metrics on the admin listener
 	AdminHandler   http.Handler // for /admin on the admin listener (optional)
+
+	// Rate limit (per virtual key). Zero disables.
+	RateLimitPerSecond float64
+	RateLimitBurst     float64
 }
 
 // Transport implements api.Transport.
@@ -43,6 +47,7 @@ type Transport struct {
 	server  *http.Server
 	admin   *http.Server
 	engine  api.Engine
+	limiter *tokenBucket
 }
 
 func New(cfg Config) *Transport {
@@ -52,7 +57,11 @@ func New(cfg Config) *Transport {
 	if cfg.RequestTimeout == 0 {
 		cfg.RequestTimeout = 30 * time.Second
 	}
-	return &Transport{cfg: cfg}
+	t := &Transport{cfg: cfg}
+	if cfg.RateLimitPerSecond > 0 {
+		t.limiter = newTokenBucket(cfg.RateLimitPerSecond, cfg.RateLimitBurst)
+	}
+	return t
 }
 
 func (t *Transport) Name() string       { return "http" }
@@ -192,6 +201,7 @@ func (t *Transport) handleChat(w http.ResponseWriter, r *http.Request) {
 
 // authenticate accepts either Authorization: Bearer <key> (OpenAI-style)
 // or x-api-key: <key> (Anthropic-style). Both must be sk-gw-* virtual keys.
+// After successful resolution, applies rate limiting keyed on KeyID.
 func (t *Transport) authenticate(w http.ResponseWriter, r *http.Request) (api.Principal, bool) {
 	key := auth.ExtractBearer(r.Header.Get("Authorization"))
 	if key == "" {
@@ -207,7 +217,22 @@ func (t *Transport) authenticate(w http.ResponseWriter, r *http.Request) (api.Pr
 		t.writeError(w, http.StatusUnauthorized, "unauthorized", "invalid key")
 		return api.Principal{}, false
 	}
+	if t.limiter != nil {
+		if ok, retryAfter := t.limiter.allow(string(p.KeyID)); !ok {
+			w.Header().Set("Retry-After", formatRetry(retryAfter))
+			t.writeError(w, http.StatusTooManyRequests, "rate_limited",
+				"rate limit exceeded; retry after "+formatRetry(retryAfter)+"s")
+			return api.Principal{}, false
+		}
+	}
 	return p, true
+}
+
+func formatRetry(s float64) string {
+	if s < 1 {
+		return "1"
+	}
+	return fmt.Sprintf("%.0f", s)
 }
 
 func (t *Transport) readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "policyd-sdk"
+version = "0.1.0"
+description = "Point the OpenAI and Anthropic Python SDKs at a policyd gateway."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "policyd contributors" }]
+requires-python = ">=3.9"
+dependencies = []  # openai/anthropic are optional peer deps
+
+[project.optional-dependencies]
+openai    = ["openai>=1.0"]
+anthropic = ["anthropic>=0.30"]
+all       = ["openai>=1.0", "anthropic>=0.30"]
+
+[project.urls]
+Homepage = "https://github.com/flyhighbarney/policyd"
+Issues   = "https://github.com/flyhighbarney/policyd/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["policyd_sdk"]

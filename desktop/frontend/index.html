@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>policyd Desktop</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header id="header">
+      <div class="brand">
+        <span class="logo">🛡️</span>
+        <h1>policyd</h1>
+      </div>
+      <div class="header-right">
+        <span id="status-pill" class="pill">checking…</span>
+        <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="compose">
+        <label for="prompt">Compose your prompt</label>
+        <textarea
+          id="prompt"
+          rows="10"
+          placeholder="Type or paste anything. Sensitive text is highlighted before it leaves your machine."
+        ></textarea>
+
+        <div id="findings-box">
+          <div class="findings-empty" id="findings-empty">
+            No sensitive content detected. Safe to send.
+          </div>
+          <ul id="findings-list"></ul>
+        </div>
+
+        <div class="row">
+          <select id="model">
+            <option value="gpt-4o-mini">gpt-4o-mini</option>
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet (routes to /v1/messages)</option>
+          </select>
+          <button id="send-btn" class="primary">Send to AI</button>
+        </div>
+      </section>
+
+      <section id="response" class="hidden">
+        <h2>Reply</h2>
+        <div id="response-text"></div>
+      </section>
+    </main>
+
+    <div id="settings-panel" class="hidden">
+      <div class="panel-inner">
+        <h2>Gateway settings</h2>
+        <label>Gateway URL
+          <input type="url" id="cfg-gateway" placeholder="https://gateway.example.com" />
+        </label>
+        <label>Virtual key
+          <input type="password" id="cfg-key" placeholder="sk-gw-…" />
+        </label>
+        <label>Tenant (optional)
+          <input type="text" id="cfg-tenant" />
+        </label>
+        <div class="panel-actions">
+          <button id="cfg-cancel">Cancel</button>
+          <button id="cfg-save" class="primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

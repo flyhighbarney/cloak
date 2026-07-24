@@ -1,0 +1,249 @@
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0f1115;
+  color: #e6e6ea;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #171923;
+  border-bottom: 1px solid #262a36;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo {
+  font-size: 20px;
+}
+h1 {
+  font-size: 16px;
+  margin: 0;
+  font-weight: 600;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pill {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #262a36;
+  color: #a0a4b4;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.pill.ok {
+  background: #1e3a24;
+  color: #7ed957;
+}
+.pill.err {
+  background: #3d1a1a;
+  color: #ff6b6b;
+}
+
+.icon-btn {
+  background: none;
+  border: 1px solid #262a36;
+  color: #a0a4b4;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: #1a1d29;
+  color: #e6e6ea;
+}
+
+main {
+  padding: 20px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+label {
+  display: block;
+  color: #a0a4b4;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+textarea,
+select,
+input {
+  width: 100%;
+  background: #171923;
+  border: 1px solid #262a36;
+  color: #e6e6ea;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+textarea:focus,
+select:focus,
+input:focus {
+  outline: none;
+  border-color: #55c8e0;
+}
+
+#findings-box {
+  background: #171923;
+  border: 1px solid #262a36;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 14px 0;
+  min-height: 60px;
+}
+.findings-empty {
+  color: #7ed957;
+  font-size: 13px;
+}
+.findings-empty.warn {
+  color: #f7c948;
+}
+.findings-empty.hidden,
+.hidden {
+  display: none !important;
+}
+#findings-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.finding {
+  padding: 6px 0;
+  border-bottom: 1px solid #1e2130;
+  font-size: 13px;
+}
+.finding:last-child {
+  border-bottom: 0;
+}
+.finding .kind {
+  color: #ff8a8a;
+  font-weight: 600;
+  margin-right: 8px;
+}
+.finding .preview {
+  color: #a0a4b4;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.row select {
+  flex: 1;
+}
+
+button {
+  background: #262a36;
+  color: #e6e6ea;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+button:hover {
+  background: #2f3444;
+}
+button.primary {
+  background: #55c8e0;
+  color: #0f1115;
+  font-weight: 600;
+}
+button.primary:hover {
+  background: #7cd8ea;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#response {
+  margin-top: 24px;
+}
+h2 {
+  font-size: 13px;
+  color: #a0a4b4;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+#response-text {
+  background: #171923;
+  border: 1px solid #262a36;
+  border-radius: 8px;
+  padding: 16px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.error {
+  color: #ff8a8a;
+}
+.error small {
+  color: #7f8798;
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+#settings-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.panel-inner {
+  background: #171923;
+  border: 1px solid #262a36;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+}
+.panel-inner h2 {
+  font-size: 16px;
+  color: #e6e6ea;
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0 0 16px;
+}
+.panel-inner label {
+  margin-top: 12px;
+}
+.panel-inner input {
+  margin-top: 4px;
+}
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}

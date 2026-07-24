@@ -1,0 +1,50 @@
+schema_version: v1.0
+
+# Rules — the human-readable overlay on top of pipeline.yaml.
+#
+# Format:
+#   - name: (optional) human title, shown in admin dashboard
+#     if:   "detects <kind>" OR "injection_score >= N"
+#     then: allow | warn | redact | block
+#
+# Kinds you can `detects`: ssn, credit_card, email, phone, person_name,
+# api_key, private_key, github_token, aws_key, or any_pii for the default.
+#
+# Rules in this file OVERRIDE the dlp/injection sections in pipeline.yaml.
+
+rules:
+  - name: "Block US SSNs — HIPAA / state privacy laws"
+    if: detects ssn
+    then: block
+
+  - name: "Block credit card numbers — PCI DSS"
+    if: detects credit_card
+    then: block
+
+  - name: "Block API keys and secrets — prevents credential theft"
+    if: detects api_key
+    then: block
+
+  - name: "Block AWS access keys"
+    if: detects aws_key
+    then: block
+
+  - name: "Block GitHub tokens"
+    if: detects github_token
+    then: block
+
+  - name: "Block private keys"
+    if: detects private_key
+    then: block
+
+  - name: "Redact emails — safe to send with tokenization"
+    if: detects email
+    then: redact
+
+  - name: "Redact everything else that looks like PII"
+    if: detects any_pii
+    then: redact
+
+  - name: "Block obvious prompt injections"
+    if: injection_score >= 50
+    then: block
