@@ -10,7 +10,8 @@ listen: ":4000"
 admin_listen: ":4001"
 
 max_body_bytes: 4194304    # 4 MiB
-request_timeout_seconds: 30
+# 120s tolerates a cold-start Ollama load. Cloud models finish in <10s.
+request_timeout_seconds: 120
 
 # DLP action policy.
 # Actions: allow | warn | redact | block

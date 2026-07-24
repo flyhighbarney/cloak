@@ -1,15 +1,27 @@
 schema_version: v1.0
 
 providers:
-  - id: openai-default
+  # Cloud OpenAI (commented for offline demo — uncomment when you have a real key).
+  # - id: openai-default
+  #   kind: openai
+  #   base_url: https://api.openai.com
+  #   api_key_env: OPENAI_API_KEY
+  #   model: gpt-4o-mini
+  #   max_context: 128000
+  #   cost_per_1k_in: 0.150
+  #   cost_per_1k_out: 0.600
+  #   local: false
+
+  # OFFLINE — Ollama running on this host.
+  - id: ollama-local
     kind: openai
-    base_url: https://api.openai.com
-    api_key_env: OPENAI_API_KEY   # actual value comes from environment
-    model: gpt-4o-mini
-    max_context: 128000
-    cost_per_1k_in: 0.150
-    cost_per_1k_out: 0.600
-    local: false
+    base_url: http://localhost:11434
+    api_key_env: OLLAMA_API_KEY
+    model: llama3.2:1b
+    max_context: 8192
+    cost_per_1k_in: 0.0
+    cost_per_1k_out: 0.0
+    local: true
 
   # Uncomment to enable Anthropic routing. Requires ANTHROPIC_API_KEY set.
   # - id: anthropic-default
