@@ -1,0 +1,42 @@
+{
+  "name": "cloakline",
+  "version": "0.1.0",
+  "description": "Local-first AI security gateway — redacts PII, secrets, and API keys before they leave your machine.",
+  "keywords": [
+    "ai",
+    "security",
+    "dlp",
+    "gateway",
+    "claude",
+    "openai",
+    "anthropic",
+    "chatgpt"
+  ],
+  "homepage": "https://github.com/flyhighbarney/cloakline",
+  "bugs": "https://github.com/flyhighbarney/cloakline/issues",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flyhighbarney/cloakline.git"
+  },
+  "bin": {
+    "cloakline": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "os": [
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

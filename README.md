@@ -8,7 +8,21 @@ A local-first AI security gateway. Drop-in OpenAI / Anthropic compatible. Redact
 
 ## The 60-second install
 
-**One command from a fresh clone:**
+**Fastest path — no clone, no Go, one command:**
+
+```bash
+npx cloakline install
+```
+
+Works on Windows and macOS. Downloads the platform-native binary from GitHub Releases into `%LOCALAPPDATA%\cloakline\` (Windows) or `~/.cloakline/` (macOS), then runs the platform bootstrap installer. Also useful without installing anything:
+
+```bash
+npx cloakline scan file.py        # offline DLP scan
+npx cloakline tail                # live terminal dashboard
+npx cloakline dashboard           # open admin UI in browser
+```
+
+**Build-from-source path (for developers):**
 
 ```bash
 git clone https://github.com/flyhighbarney/cloakline.git

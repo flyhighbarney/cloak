@@ -1,6 +1,9 @@
-# Force LF line endings for anything a POSIX shell must execute or read.
-# Windows checkouts of these files must still have LF; otherwise bash on
-# macOS/Linux errors with "/usr/bin/env: 'bash\r': No such file or directory".
+# Force LF line endings for anything a POSIX shell / node interpreter
+# must read. Windows checkouts of these files must still have LF; otherwise
+# bash on macOS/Linux errors with:
+#   /usr/bin/env: 'bash\r': No such file or directory
+# and node's shebang parsing chokes similarly on CRLF endings.
 *.sh    text eol=lf
+*.js    text eol=lf
 *.plist text eol=lf
 Makefile text eol=lf

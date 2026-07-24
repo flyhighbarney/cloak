@@ -35,7 +35,38 @@ cloakline is a local-first AI security gateway that sits between your developmen
 
 ## 2. Installation
 
-### 2a. One-command install (recommended)
+### 2a. Fastest path — `npx cloakline install`
+
+If you have Node.js 16+ on PATH (most developers do), this is the shortest install:
+
+```bash
+npx cloakline install
+```
+
+That does the following:
+
+1. Downloads the platform-native binaries + scripts from the [latest GitHub Release](https://github.com/flyhighbarney/cloakline/releases) into a stable location:
+   - Windows: `%LOCALAPPDATA%\cloakline\`
+   - macOS: `~/.cloakline/`
+2. Runs the platform's `bootstrap` script with `--skip-build` (binaries are already downloaded), which handles CA trust, hosts file, scheduled task / LaunchAgent, pf redirect on macOS, and verification.
+
+**No cloning, no Go compiler needed.** The npm package (`node_modules/cloakline`) is only a JS shim — the daemon is a native Go binary.
+
+Standalone subcommands work without a full install:
+
+```bash
+npx cloakline scan file.py        # offline DLP scan
+npx cloakline doctor              # local health check
+npx cloakline tail                # live terminal dashboard
+```
+
+The first invocation downloads only the `cloak` CLI (~10 MB). Subsequent runs use the cached binary.
+
+**Environment overrides:**
+- `CLOAKLINE_TAG=v0.1.2 npx cloakline install` — pin to a specific release
+- Set `CLOAKLINE_TAG=latest` (default) to always pull newest
+
+### 2b. Build-from-source (developers) — one-command install
 
 #### Windows
 
@@ -91,7 +122,7 @@ If any step fails, the hosts file is rolled back automatically so nothing is lef
 
 Requirements: Go 1.22+ on PATH (unless you use `--skip-build` / `-SkipBuild`).
 
-### 2b. Manual install (if you prefer step-by-step)
+### 2c. Manual install (if you prefer step-by-step)
 
 ```bash
 # Clone the repo
@@ -107,7 +138,7 @@ go build -trimpath -o ./bin/cloak.exe    ./cmd/cloak
 
 The two binaries are self-contained — no runtime dependencies.
 
-### 2c. Interactive setup wizard
+### 2d. Interactive setup wizard
 
 ```bash
 ./bin/cloak.exe setup
@@ -124,7 +155,7 @@ The two binaries are self-contained — no runtime dependencies.
 
 After setup, optionally choose to add a startup shortcut so cloakline runs on login.
 
-### 2d. Hosts file (required for TLS interception)
+### 2e. Hosts file (required for TLS interception)
 
 Open Notepad as Administrator and edit `C:\Windows\System32\drivers\etc\hosts`. Add:
 
@@ -137,7 +168,7 @@ Then in `configs/pipeline.yaml`, set `inspect.listen: ":443"` and start cloaklin
 
 > **Why is this needed?** These entries redirect AI-provider hostnames to your local machine. cloakline terminates the TLS connection, inspects the body, and forwards to the real provider using its own connection. Without this step, your tools talk to providers directly and cloakline cannot see the traffic.
 
-### 2e. Start the daemon
+### 2f. Start the daemon
 
 ```bash
 ./bin/cloakline.exe --config ./configs
@@ -455,7 +486,15 @@ The local inspection CA is installed **per-user** (`certutil -user -addstore Roo
 
 ## 7. Uninstall
 
-### macOS
+### If you installed with `npx cloakline install`
+
+```bash
+npx cloakline uninstall
+```
+
+That runs the platform's `uninstall` script from the installed location, then you can `rm -rf ~/.cloakline` (macOS) or `rmdir /s /q "%LOCALAPPDATA%\cloakline"` (Windows) for a full wipe.
+
+### macOS (built from source)
 
 ```bash
 ./scripts/uninstall.sh
