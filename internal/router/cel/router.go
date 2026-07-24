@@ -97,10 +97,19 @@ func buildEnv(r *api.Request, snap api.RouteSnapshot) api.PolicyEnv {
 			},
 		}
 	}
+	// Extract the client-requested model from whichever provider extension
+	// the transport populated. Empty when neither is set.
+	model := ""
+	if ext, ok := r.Extensions.OpenAI(); ok && ext.Model != "" {
+		model = ext.Model
+	} else if ext, ok := r.Extensions.Anthropic(); ok && ext.Model != "" {
+		model = ext.Model
+	}
 	return api.PolicyEnv{
 		"request": map[string]any{
 			"id":              string(r.ID),
 			"mode":            r.Mode.String(),
+			"model":           model,
 			"modalities":      modList,
 			"parts_count":     partsCount,
 			"total_bytes":     totalBytes,
