@@ -1,0 +1,59 @@
+# Caddy reverse-proxy config for policyd.
+# Env vars come from docker-compose (${DOMAIN}, ${ADMIN_EMAIL}, ${ADMIN_PASSWORD_HASH}).
+
+{
+    email {$ADMIN_EMAIL}
+    # Caddy auto-provisions TLS from Let's Encrypt on first request.
+    # Comment out `email` in dev to use a self-signed cert.
+}
+
+{$DOMAIN} {
+    encode gzip zstd
+
+    # OpenAI-shaped ingress
+    handle /v1/chat/completions {
+        reverse_proxy policyd:4000 {
+            flush_interval -1        # required for SSE streaming
+        }
+    }
+
+    # Anthropic-shaped ingress
+    handle /v1/messages {
+        reverse_proxy policyd:4000 {
+            flush_interval -1
+        }
+    }
+
+    # Public health check (no auth — needed for uptime monitors)
+    handle /healthz {
+        reverse_proxy policyd:4000
+    }
+
+    # Metrics — behind basic auth on the admin port
+    handle /metrics {
+        basicauth {
+            admin {$ADMIN_PASSWORD_HASH}
+        }
+        reverse_proxy policyd:4001
+    }
+
+    # Admin dashboard — behind the same basic auth
+    handle /admin* {
+        basicauth {
+            admin {$ADMIN_PASSWORD_HASH}
+        }
+        reverse_proxy policyd:4001
+    }
+
+    # Fallback: reject everything else with a small 404 body.
+    handle {
+        respond `{"error":{"type":"not_found","message":"unknown endpoint"}}` 404 {
+            close
+        }
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

@@ -1,0 +1,197 @@
+{{define "dashboard.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>policyd · admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0f1115;
+      color: #e6e6ea;
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    header {
+      background: #171923;
+      border-bottom: 1px solid #262a36;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    header .meta { color: #7f8798; font-size: 12px; }
+    main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat {
+      background: #171923;
+      border: 1px solid #262a36;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .stat .label { color: #7f8798; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
+    .stat .value { color: #e6e6ea; font-size: 22px; font-weight: 600; margin-top: 4px; }
+    .stat.block .value  { color: #ff6b6b; }
+    .stat.warn .value   { color: #f7c948; }
+    .stat.redact .value { color: #55c8e0; }
+    .stat.allow .value  { color: #7ed957; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #171923;
+      border: 1px solid #262a36;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+    thead th {
+      text-align: left;
+      background: #1c1f2a;
+      color: #7f8798;
+      font-weight: 500;
+      padding: 10px 12px;
+      border-bottom: 1px solid #262a36;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #1e2130;
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #1a1d29; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .v-allow  { background: #1e3a24; color: #7ed957; }
+    .v-redact { background: #1a3540; color: #55c8e0; }
+    .v-warn   { background: #3a2e15; color: #f7c948; }
+    .v-block  { background: #3d1a1a; color: #ff6b6b; }
+    .v-auth   { background: #3d1a1a; color: #ff8a8a; }
+    .v-err    { background: #331d1d; color: #ff6b6b; }
+    .v-other  { background: #262a36; color: #a0a4b4; }
+
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+    .muted { color: #7f8798; }
+    .tag {
+      display: inline-block;
+      background: #262a36;
+      color: #b5b9c8;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin: 1px 2px 1px 0;
+      font-family: ui-monospace, monospace;
+    }
+    .empty {
+      padding: 40px 24px;
+      text-align: center;
+      color: #7f8798;
+    }
+    footer { padding: 24px; color: #7f8798; font-size: 12px; text-align: center; }
+    footer .mono { color: #7f8798; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>policyd · admin</h1>
+    <div class="meta">
+      <span class="mono">{{.Version}}</span>
+      &nbsp;·&nbsp;
+      <span>{{.Now}}</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="stats">
+      <div class="stat"><div class="label">total lifetime</div><div class="value">{{.Stats.Total}}</div></div>
+      <div class="stat"><div class="label">buffered</div><div class="value">{{.Stats.Buffered}} / {{.Stats.Capacity}}</div></div>
+      <div class="stat allow"><div class="label">allowed</div><div class="value">{{.Stats.Allowed}}</div></div>
+      <div class="stat redact"><div class="label">redacted</div><div class="value">{{.Stats.Redacted}}</div></div>
+      <div class="stat warn"><div class="label">warned</div><div class="value">{{.Stats.Warned}}</div></div>
+      <div class="stat block"><div class="label">blocked (DLP)</div><div class="value">{{.Stats.BlockedDLP}}</div></div>
+      <div class="stat block"><div class="label">blocked (policy)</div><div class="value">{{.Stats.BlockedPolicy}}</div></div>
+      <div class="stat"><div class="label">upstream errors</div><div class="value">{{.Stats.UpstreamErrors}}</div></div>
+      <div class="stat"><div class="label">auth failures</div><div class="value">{{.Stats.AuthFailures}}</div></div>
+    </div>
+
+    {{if .Entries}}
+    <table>
+      <thead>
+        <tr>
+          <th>Time (UTC)</th>
+          <th>Tenant</th>
+          <th>Key</th>
+          <th>Endpoint</th>
+          <th>Mode</th>
+          <th>Upstream</th>
+          <th>Verdict</th>
+          <th>DLP findings</th>
+          <th>Injection</th>
+          <th>Duration</th>
+          <th>Request ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Entries}}
+        <tr>
+          <td class="mono">{{fmtTime .Timestamp}}</td>
+          <td>{{if .TenantID}}{{.TenantID}}{{else}}<span class="muted">—</span>{{end}}</td>
+          <td class="mono">{{if .KeyID}}{{.KeyID}}{{else}}<span class="muted">—</span>{{end}}</td>
+          <td class="mono">{{.Endpoint}}</td>
+          <td>{{.Mode}}</td>
+          <td>{{if .Upstream}}{{.Upstream}}{{else}}<span class="muted">—</span>{{end}}</td>
+          <td><span class="badge {{verdictClass .Verdict}}">{{.Verdict}}</span></td>
+          <td>
+            {{if .DLPFindings}}
+              {{range .DLPFindings}}<span class="tag">{{.}}</span>{{end}}
+            {{else}}
+              <span class="muted">—</span>
+            {{end}}
+          </td>
+          <td>
+            {{if gt .InjectionScore 0}}
+              <span class="mono">{{.InjectionScore}}</span>
+              {{if .InjectionRules}}<div>{{range .InjectionRules}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
+            {{else}}
+              <span class="muted">—</span>
+            {{end}}
+          </td>
+          <td class="mono">{{.DurationMS}} ms</td>
+          <td class="mono muted">{{truncate .RequestID 12}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <div class="empty">No requests yet. Send some traffic through the gateway.</div>
+    {{end}}
+  </main>
+
+  <footer>
+    Showing last {{.Limit}} requests · <span class="mono">/admin?n=500</span> for more · no plaintext content is ever stored.
+  </footer>
+</body>
+</html>
+{{end}}

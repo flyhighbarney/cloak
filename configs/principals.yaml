@@ -1,0 +1,14 @@
+schema_version: v1.0
+
+principals:
+  - key: sk-gw-dev-alpha-000000000000
+    tenant_id: default
+    key_id: dev-alpha
+    scopes:
+      - chat:read
+      - chat:stream
+    budget_ref: default
+    routing_policy: openai-default-v1
+    expiry_unix: 0
+    metadata:
+      description: "Local development key"

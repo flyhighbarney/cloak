@@ -1,0 +1,20 @@
+schema_version: v1.0
+
+policies:
+  - id: openai-default-v1
+    api_version: v1.0
+    kind: routing
+    expression: |
+      snapshot.candidates
+        .filter(u, u.kind == "openai" && u.health == "healthy")
+        .map(u, {"upstream_id": u.id, "reason": "openai-healthy"})[0]
+
+  # Uncomment when the anthropic provider is enabled in providers.yaml.
+  # This routes /v1/messages traffic to Anthropic, /v1/chat/completions to OpenAI.
+  # - id: anthropic-default-v1
+  #   api_version: v1.0
+  #   kind: routing
+  #   expression: |
+  #     snapshot.candidates
+  #       .filter(u, u.kind == "anthropic" && u.health == "healthy")
+  #       .map(u, {"upstream_id": u.id, "reason": "anthropic-healthy"})[0]

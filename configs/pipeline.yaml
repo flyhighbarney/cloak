@@ -1,0 +1,43 @@
+schema_version: v1.0
+
+# env: dev | prod. Prod tightens governance invariants (see docs/threat-model.md).
+env: dev
+
+# security: dev | permissive | strict. Prod requires strict.
+security: dev
+
+listen: ":4000"
+admin_listen: ":4001"
+
+max_body_bytes: 4194304    # 4 MiB
+request_timeout_seconds: 30
+
+# DLP action policy.
+# Actions: allow | warn | redact | block
+#   allow  - content passes unmodified
+#   warn   - tokenizes AND emits a warning event (for audit)
+#   redact - tokenizes silently; response is de-anonymized on the return path
+#   block  - rejects the request with 403
+injection:
+  # Score threshold at which a request is blocked with 403.
+  # Curated rule set; each rule contributes 15–45 points on match.
+  # Default: 50 (single strong rule OR two moderate rules will block).
+  threshold: 50
+
+dlp:
+  default: redact
+  actions:
+    ssn: block            # US SSNs never leave your network
+    credit_card: block    # never send card data to a cloud LLM
+    email: redact         # tokenize + restore on response
+    api_key: block        # secrets never leave
+    private_key: block
+    aws_key: block
+    github_token: block
+
+# Informational: DAG order is derived from Stage.Requires().
+stages:
+  - normalize
+  - extract.text
+  - dlp.tier1
+  - reassemble

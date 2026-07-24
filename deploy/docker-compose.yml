@@ -1,0 +1,57 @@
+# SaaS deployment: Caddy (TLS + reverse proxy) + policyd (gateway).
+#
+# Public shape:
+#   https://${DOMAIN}/v1/chat/completions   -> policyd:4000 (traffic)
+#   https://${DOMAIN}/v1/messages           -> policyd:4000 (traffic)
+#   https://${DOMAIN}/healthz               -> policyd:4000 (public health)
+#   https://${DOMAIN}/metrics               -> policyd:4001 (basic-auth gated)
+#
+# Only Caddy binds ports on the host. policyd is on the docker network only.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"    # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+    depends_on:
+      policyd:
+        condition: service_healthy
+
+  policyd:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: policyd:local
+    restart: unless-stopped
+    expose:
+      - "4000"
+      - "4001"
+    volumes:
+      - ../configs:/configs:ro
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "/policyd", "--config", "/configs", "--healthcheck"]
+      # Fallback: the distroless image has no shell, so we invoke policyd itself.
+      # If --healthcheck isn't implemented yet, use the wget-based image path below.
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  caddy_data:
+  caddy_config:
