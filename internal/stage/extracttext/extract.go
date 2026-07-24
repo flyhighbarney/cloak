@@ -10,8 +10,8 @@ import (
 	"context"
 	"fmt"
 
-	"policyd/internal/api"
-	"policyd/internal/stage/normalize"
+	"cloakline/internal/api"
+	"cloakline/internal/stage/normalize"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 const APIVersion = api.RouterAPIVersion

@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 func TestValidateURL_SchemeAllowlist(t *testing.T) {

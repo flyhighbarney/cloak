@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 func TestCompileValidRules(t *testing.T) {

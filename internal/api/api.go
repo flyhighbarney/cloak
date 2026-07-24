@@ -1,4 +1,4 @@
-// Package api holds the canonical types and interface contracts for policyd.
+// Package api holds the canonical types and interface contracts for cloakline.
 //
 // This package MUST NOT import any other package in this module. It is a leaf.
 // If a change here would force an import from a lower package, the design is wrong.

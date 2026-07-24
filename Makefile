@@ -1,13 +1,13 @@
-.PHONY: build build-policyd build-policyctl test race run docker fmt vet tidy install-cli clean
+.PHONY: build build-daemon build-cli test race run fmt vet tidy docker install-cli clean
 
 # Build both binaries.
-build: build-policyd build-policyctl
+build: build-daemon build-cli
 
-build-policyd:
-	go build -trimpath -o ./bin/policyd ./cmd/policyd
+build-daemon:
+	go build -trimpath -o ./bin/cloakline.exe ./cmd/cloakline
 
-build-policyctl:
-	go build -trimpath -o ./bin/policyctl ./cmd/policyctl
+build-cli:
+	go build -trimpath -o ./bin/cloak.exe ./cmd/cloak
 
 test:
 	go test ./...
@@ -16,7 +16,7 @@ race:
 	go test -race ./...
 
 run:
-	go run ./cmd/policyd --config ./configs
+	go run ./cmd/cloakline --config ./configs
 
 fmt:
 	gofmt -w .
@@ -28,10 +28,10 @@ tidy:
 	go mod tidy
 
 docker:
-	docker build -t policyd:local .
+	docker build -t cloakline:local .
 
-install-cli: build-policyctl
-	cp ./bin/policyctl $(GOPATH)/bin/policyctl 2>/dev/null || cp ./bin/policyctl /usr/local/bin/policyctl
+install-cli: build-cli
+	cp ./bin/cloak.exe $(GOPATH)/bin/cloak.exe 2>/dev/null || cp ./bin/cloak.exe /usr/local/bin/cloak
 
 clean:
 	rm -rf ./bin

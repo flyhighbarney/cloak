@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>policyd · admin</title>
+  <title>cloakline · admin</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -46,6 +46,26 @@
     .stat.warn .value   { color: #f7c948; }
     .stat.redact .value { color: #55c8e0; }
     .stat.allow .value  { color: #7ed957; }
+    .stat.hero {
+      background: linear-gradient(135deg, #1a2540 0%, #171923 100%);
+      border-color: #2a3550;
+    }
+    .stat.hero .value { color: #a1b4ff; font-size: 28px; }
+    .stat.hero .label { color: #8892b5; }
+    .stat .sub { font-size: 11px; color: #7f8798; margin-top: 4px; }
+
+    nav.tabs { margin-bottom: 20px; }
+    nav.tabs a {
+      display: inline-block;
+      color: #a0a4b4;
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    nav.tabs a.active { background: #262a36; color: #e6e6ea; }
+    nav.tabs a:hover { color: #e6e6ea; }
 
     table {
       width: 100%;
@@ -115,7 +135,7 @@
 </head>
 <body>
   <header>
-    <h1>policyd · admin</h1>
+    <h1>cloakline · admin</h1>
     <div class="meta">
       <span class="mono">{{.Version}}</span>
       &nbsp;·&nbsp;
@@ -124,8 +144,41 @@
   </header>
 
   <main>
+    <nav class="tabs">
+      <a href="/admin" class="active">Activity</a>
+      <a href="/admin/keys">API keys</a>
+      <a href="/admin/prefs">Preferences</a>
+    </nav>
+
     <div class="stats">
-      <div class="stat"><div class="label">total lifetime</div><div class="value">{{.Stats.Total}}</div></div>
+      <div class="stat hero">
+        <div class="label">requests scanned</div>
+        <div class="value">{{.Stats.Total}}</div>
+        <div class="sub">since cloakline started</div>
+      </div>
+      <div class="stat hero">
+        <div class="label">secrets caught</div>
+        <div class="value">{{.Stats.LifetimeSecretsCaught}}</div>
+        <div class="sub">API keys, tokens, private keys</div>
+      </div>
+      <div class="stat hero">
+        <div class="label">PII redacted</div>
+        <div class="value">{{.Stats.LifetimePIIRedacted}}</div>
+        <div class="sub">email, phone, SSN, name, card</div>
+      </div>
+      <div class="stat hero">
+        <div class="label">injections blocked</div>
+        <div class="value">{{.Stats.LifetimeInjectionsBlocked}}</div>
+        <div class="sub">prompt-injection attempts</div>
+      </div>
+      <div class="stat hero">
+        <div class="label">estimated time saved</div>
+        <div class="value">{{.TimeSaved}}</div>
+        <div class="sub">heuristic: 5m/secret + 15m/injection</div>
+      </div>
+    </div>
+
+    <div class="stats">
       <div class="stat"><div class="label">buffered</div><div class="value">{{.Stats.Buffered}} / {{.Stats.Capacity}}</div></div>
       <div class="stat allow"><div class="label">allowed</div><div class="value">{{.Stats.Allowed}}</div></div>
       <div class="stat redact"><div class="label">redacted</div><div class="value">{{.Stats.Redacted}}</div></div>

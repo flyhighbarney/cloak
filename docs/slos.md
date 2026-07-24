@@ -26,7 +26,7 @@ Phase 0 implements classes S, M, L, STREAM-S, STREAM-M (all text). L and STREAM-
 
 ### Gateway overhead (excludes upstream RTT)
 
-Measured as `policyd_request_duration_seconds - policyd_upstream_duration_seconds`.
+Measured as `cloakline_request_duration_seconds - cloakline_upstream_duration_seconds`.
 
 | Class | Target (p95) | Target (p99) | Error budget |
 |---|---|---|---|
@@ -64,7 +64,7 @@ The "chunk-to-chunk overhead" is what the vault de-anonymization and any streami
 
 ### Success rate
 
-Measured as `policyd_requests_total{outcome="success"} / policyd_requests_total`, over a 30-day rolling window.
+Measured as `cloakline_requests_total{outcome="success"} / cloakline_requests_total`, over a 30-day rolling window.
 
 | Outcome class | Target |
 |---|---|
@@ -73,7 +73,7 @@ Measured as `policyd_requests_total{outcome="success"} / policyd_requests_total`
 
 ### Availability
 
-`policyd` availability is defined as: `/healthz` returns 200. Target: **99.9%** monthly on a single instance (single-node deployment; no HA in Phase 0).
+`cloakline` availability is defined as: `/healthz` returns 200. Target: **99.9%** monthly on a single instance (single-node deployment; no HA in Phase 0).
 
 Excluded from the availability window: operator-initiated restarts (config change, upgrade).
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 // PromMeter implements api.Meter over a Prometheus registry.

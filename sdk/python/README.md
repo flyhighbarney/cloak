@@ -1,16 +1,16 @@
-# policyd-sdk (Python)
+# cloakline-sdk (Python)
 
-A zero-config Python wrapper that points the official OpenAI and Anthropic SDKs at your [policyd](https://github.com/flyhighbarney/policyd) gateway.
+A zero-config Python wrapper that points the official OpenAI and Anthropic SDKs at your [cloakline](https://github.com/flyhighbarney/cloakline) gateway.
 
 ## Install
 
 ```bash
-pip install policyd-sdk openai anthropic
+pip install cloakline-sdk openai anthropic
 ```
 
 ## Configure
 
-Either run `policyctl login https://your-gateway.com` (writes `~/.config/policyctl/config.yaml`) or set env vars:
+Either run `cloak login https://your-gateway.com` (writes `~/.config/policyctl/config.yaml`) or set env vars:
 
 ```bash
 export POLICYD_GATEWAY=https://gateway.example.com
@@ -20,7 +20,7 @@ export POLICYD_API_KEY=sk-gw-your-key
 ## Use
 
 ```python
-from policyd_sdk import openai_client, anthropic_client
+from cloakline_sdk import openai_client, anthropic_client
 
 # OpenAI, routed through your gateway
 oai = openai_client()
@@ -38,7 +38,7 @@ resp = ant.messages.create(
 )
 ```
 
-Every call runs through policyd's DLP, injection-defense, and audit trail.
+Every call runs through cloakline's DLP, injection-defense, and audit trail.
 
 ## Explicit override
 

@@ -72,7 +72,7 @@ Each entry has:
 - **Effort:** M (over HTTP) or XL (in-process).
 - **Prep:** None specific; the HTTP transport is already OpenAI-compatible, so existing SDKs work with base URL swap.
 
-### T-CLI — `policyctl` CLI
+### T-CLI — `cloak` CLI
 - **Feature:** Interactive chat, audit tailing, key management CLI.
 - **Signal:** 3+ operators ask for CLI-based key rotation.
 - **Effort:** M.
@@ -152,6 +152,13 @@ Each entry has:
 ---
 
 ## Persistence
+
+### T-KEYVAULT-KEYRING — Cross-platform native keyring **PARTIALLY FIRED: 2026-07-24**
+- **Feature:** Store user-supplied API keys via the OS-native credential store on all three desktop platforms (Windows Credential Manager / macOS Keychain / Linux Secret Service).
+- **Fired for:** Windows only (DPAPI-encrypted files under `%LOCALAPPDATA%\cloakline\keys\`, direct syscall — no external dep). Shipped alongside dashboard-managed keys and `cloak launch`.
+- **Waiver rationale:** The OS keyring is not a database — the OS owns the secret lifecycle. Single-user, per-machine only; no sync, no export. This is the smallest possible T-PERSIST-adjacent surface. Non-Windows platforms fall back to the in-memory backend until a native implementation lands.
+- **Signal for macOS / Linux:** first user report on either platform.
+- **Effort remaining:** S (macOS Keychain via `security` CLI or Go binding; Linux Secret Service via `dbus`).
 
 ### T-PERSIST — Any persistence layer
 - **Feature:** Move state from in-memory to a durable store (SQLite first, then Postgres).

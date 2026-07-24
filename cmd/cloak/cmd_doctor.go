@@ -11,7 +11,7 @@ import (
 // first command a dev runs when something looks off. Every check either
 // prints ✓ or emits an actionable fix.
 func cmdDoctor(_ []string) error {
-	fmt.Println(bold("policyctl doctor"))
+	fmt.Println(bold("cloak doctor"))
 	fmt.Println(gray(strings.Repeat("─", 40)))
 
 	cfg, err := loadConfig()
@@ -26,7 +26,7 @@ func cmdDoctor(_ []string) error {
 		fmt.Printf("  %s config file: %s\n", green("✓"), gray(path))
 	} else {
 		fmt.Printf("  %s config file missing (%s)\n", yellow("!"), gray(path))
-		fmt.Printf("      run: %s\n", cyan("policyctl login <gateway-url>"))
+		fmt.Printf("      run: %s\n", cyan("cloak login <gateway-url>"))
 	}
 
 	// 2. Gateway URL well-formed?

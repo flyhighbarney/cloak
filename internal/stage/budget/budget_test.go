@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 func TestBudgetAllowsUpToCap(t *testing.T) {

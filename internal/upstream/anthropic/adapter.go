@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 const (

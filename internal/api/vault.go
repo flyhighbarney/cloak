@@ -55,6 +55,9 @@ const (
 	PIIPrivateKey  PIIKind = "private_key"
 	PIIGitHubToken PIIKind = "github_token"
 	PIIAWSKey      PIIKind = "aws_key"
+	PIIPassword    PIIKind = "password"
+	PIIIPAddress   PIIKind = "ip_address"
+	PIIURLPath     PIIKind = "url_path"
 )
 
 // SessionVault is a stream-scoped state machine mapping PII → pseudonyms.

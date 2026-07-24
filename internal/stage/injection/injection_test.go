@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 func run(t *testing.T, s *Stage, text string) (int, error) {

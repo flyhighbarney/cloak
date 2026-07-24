@@ -90,7 +90,7 @@ The minimum feature set required to say "we have a product." Each item is a hard
 ### 1.6 Multi-tenancy (SaaS shape)
 
 - [ ] **One binary, N tenants.** Each tenant has: virtual key(s), policy set, quota, real cloud-provider key (or shares a common one).
-- [ ] **Signup CLI.** `./policyctl tenant create --name=acme` issues a virtual key and prints setup instructions in one line.
+- [ ] **Signup CLI.** `./cloak tenant create --name=acme` issues a virtual key and prints setup instructions in one line.
 - [ ] **Quota enforcement.** Per-tenant daily request cap; exceeded returns 429.
 
 ---
@@ -264,14 +264,14 @@ Every item costs $0/mo until first paying customer.
 - [ ] **Observability.** Grafana Cloud free tier (10k series, 14-day retention). Set up as a Prometheus scrape target of the gateway's `/metrics`.
 - [ ] **Uptime monitoring.** BetterStack free tier or UptimeRobot free tier — one monitor on `/healthz`.
 - [ ] **Error tracking.** Sentry free tier (5k events/mo) OR just structured logs to Grafana Loki free tier.
-- [x] **Git hosting.** GitHub free — [github.com/flyhighbarney/policyd](https://github.com/flyhighbarney/policyd) (private).
+- [x] **Git hosting.** GitHub free — [github.com/flyhighbarney/cloakline](https://github.com/flyhighbarney/cloakline) (private).
 - [x] **`.gitignore` in place.** Excludes `.env`, private keys (`*.pem`, `*.key`, `*_rsa`, `*_ed25519`), build artifacts, IDE files, OS junk. Only `.env.example` is tracked.
 - [ ] **CI.** GitHub Actions free tier (2000 min/mo — plenty). Not yet wired.
 - [ ] **Container registry.** GitHub Container Registry free for public images. Not yet wired.
 
 ### 4.2 Deployment recipe
 
-- [ ] Docker Compose file in repo: `caddy`, `policyd`, one shared volume for config.
+- [ ] Docker Compose file in repo: `caddy`, `cloakline`, one shared volume for config.
 - [ ] `.env.example` file listing every env var (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `ADMIN_PASSWORD`, `DOMAIN`).
 - [ ] `deploy.sh` — one command that a founder runs on a fresh VPS: pulls latest image, restarts container.
 - [ ] Rollback: previous image tag kept; `deploy.sh --rollback` reverts.
@@ -293,7 +293,7 @@ Every item costs $0/mo until first paying customer.
 - [ ] Privacy policy (free template — auto-generated from termsfeed.com or similar). Say honestly: "we relay prompts to OpenAI/Anthropic; we redact PII before relay; we retain audit metadata only; we do not train on your data."
 - [ ] Terms of service.
 - [ ] `SECURITY.md` in the repo with a security contact email.
-  - Repo lives at [github.com/flyhighbarney/policyd](https://github.com/flyhighbarney/policyd) (private) — add before flipping public.
+  - Repo lives at [github.com/flyhighbarney/cloakline](https://github.com/flyhighbarney/cloakline) (private) — add before flipping public.
 - [ ] A public status page (statuspage.io free? Grafana `stat panels` shared publicly?).
 
 ### 4.5 Support surface

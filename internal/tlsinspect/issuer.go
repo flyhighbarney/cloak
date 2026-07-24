@@ -72,7 +72,7 @@ func (i *Issuer) issue(host string) (*tls.Certificate, error) {
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName:   host,
-			Organization: []string{"policyd (local inspection leaf)"},
+			Organization: []string{"cloakline (local inspection leaf)"},
 		},
 		NotBefore:   now.Add(-1 * time.Hour),
 		NotAfter:    now.AddDate(1, 0, 0),

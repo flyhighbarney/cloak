@@ -1,7 +1,7 @@
 // Package integration is the end-to-end smoke test harness.
 //
 // It spins up a mock upstream (httptest.Server that echoes the request body),
-// an in-process policyd engine, and drives real HTTP requests through the
+// an in-process cloakline engine, and drives real HTTP requests through the
 // transport. This is what CI runs to prove the DLP redaction + de-anonymize
 // loop actually round-trips without leaking plaintext.
 //
@@ -26,25 +26,25 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"policyd/internal/adminui"
-	"policyd/internal/api"
-	"policyd/internal/audit"
-	"policyd/internal/auth"
-	"policyd/internal/engine"
-	"policyd/internal/httpclient"
-	"policyd/internal/obs/log"
-	"policyd/internal/obs/meter"
-	policycel "policyd/internal/policy/cel"
-	routercel "policyd/internal/router/cel"
-	"policyd/internal/stage/budget"
-	"policyd/internal/stage/dlptier1"
-	"policyd/internal/stage/extracttext"
-	"policyd/internal/stage/injection"
-	"policyd/internal/stage/normalize"
-	"policyd/internal/stage/reassemble"
-	httpxport "policyd/internal/transport/http"
-	openaiup "policyd/internal/upstream/openai"
-	"policyd/internal/vault/session"
+	"cloakline/internal/adminui"
+	"cloakline/internal/api"
+	"cloakline/internal/audit"
+	"cloakline/internal/auth"
+	"cloakline/internal/engine"
+	"cloakline/internal/httpclient"
+	"cloakline/internal/obs/log"
+	"cloakline/internal/obs/meter"
+	policycel "cloakline/internal/policy/cel"
+	routercel "cloakline/internal/router/cel"
+	"cloakline/internal/stage/budget"
+	"cloakline/internal/stage/dlptier1"
+	"cloakline/internal/stage/extracttext"
+	"cloakline/internal/stage/injection"
+	"cloakline/internal/stage/normalize"
+	"cloakline/internal/stage/reassemble"
+	httpxport "cloakline/internal/transport/http"
+	openaiup "cloakline/internal/upstream/openai"
+	"cloakline/internal/vault/session"
 )
 
 // fixture is the fully-wired in-process gateway used by every test.
@@ -60,7 +60,7 @@ type mockCall struct {
 	Body []byte
 }
 
-// setupFixture wires the entire policyd stack in-process against a mock
+// setupFixture wires the entire cloakline stack in-process against a mock
 // upstream that captures every request body. The fixture returns the
 // public URL of the gateway plus a valid virtual key.
 func setupFixture(t *testing.T) *fixture {

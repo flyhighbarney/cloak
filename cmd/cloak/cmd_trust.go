@@ -11,13 +11,13 @@ import (
 	"runtime"
 	"strings"
 
-	"policyd/internal/tlsinspect"
+	"cloakline/internal/tlsinspect"
 )
 
 // cmdTrust dispatches subcommands for the local inspection CA.
 func cmdTrust(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: policyctl trust <show|status|install|remove>")
+		return errors.New("usage: cloak trust <show|status|install|remove>")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -39,7 +39,7 @@ func caDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "policyd", "ca"), nil
+	return filepath.Join(base, "cloakline", "ca"), nil
 }
 
 func trustShow(_ []string) error {
@@ -59,7 +59,7 @@ func trustShow(_ []string) error {
 	fmt.Println()
 	fmt.Println(bold("To trust this CA on this machine:"))
 	fmt.Println()
-	fmt.Println("  " + cyan("policyctl trust install"))
+	fmt.Println("  " + cyan("cloak trust install"))
 	fmt.Println()
 	fmt.Println("Or install manually:")
 	fmt.Println()
@@ -69,11 +69,11 @@ func trustShow(_ []string) error {
 	case "darwin":
 		fmt.Printf("  security add-trusted-cert -k ~/Library/Keychains/login.keychain-db %q\n", certPath)
 	case "linux":
-		fmt.Printf("  sudo cp %q /usr/local/share/ca-certificates/policyd-local.crt\n", certPath)
+		fmt.Printf("  sudo cp %q /usr/local/share/ca-certificates/cloakline-local.crt\n", certPath)
 		fmt.Println("  sudo update-ca-certificates")
 	}
 	fmt.Println()
-	fmt.Println(gray("You can undo either with `policyctl trust remove`."))
+	fmt.Println(gray("You can undo either with `cloak trust remove`."))
 	return nil
 }
 
@@ -84,7 +84,7 @@ func trustStatus(_ []string) error {
 	}
 	certPath := filepath.Join(dir, "ca-cert.pem")
 	if _, err := os.Stat(certPath); errors.Is(err, os.ErrNotExist) {
-		fmt.Printf("%s no local CA yet — run %s\n", yellow("!"), cyan("policyctl trust show"))
+		fmt.Printf("%s no local CA yet — run %s\n", yellow("!"), cyan("cloak trust show"))
 		return nil
 	}
 	fmt.Printf("%s CA file present at %s\n", green("✓"), gray(certPath))
@@ -92,7 +92,7 @@ func trustStatus(_ []string) error {
 		fmt.Printf("%s CA is installed in the current user's trust store\n", green("✓"))
 	} else {
 		fmt.Printf("%s CA is not in the OS trust store (or check is inconclusive)\n", yellow("!"))
-		fmt.Printf("      run: %s\n", cyan("policyctl trust install"))
+		fmt.Printf("      run: %s\n", cyan("cloak trust install"))
 	}
 	return nil
 }
@@ -119,9 +119,9 @@ func trustInstall(args []string) error {
 		fmt.Printf("  CA:      %s\n", ca.Cert.Subject.CommonName)
 		fmt.Printf("  scope:   current user only\n")
 		fmt.Printf("  cert:    %s\n", certPath)
-		fmt.Printf("  purpose: policyd local inspection (see docs/inspect.md)\n")
+		fmt.Printf("  purpose: cloakline local inspection (see docs/inspect.md)\n")
 		fmt.Println()
-		fmt.Println("This lets policyd terminate TLS locally on your own machine so")
+		fmt.Println("This lets cloakline terminate TLS locally on your own machine so")
 		fmt.Println("its DLP layer can scan AI-provider request bodies before they leave.")
 		fmt.Println()
 		fmt.Println("This does NOT trust anything from anywhere else.")
@@ -166,7 +166,7 @@ func trustRemove(args []string) error {
 	}
 	_ = os.Remove(certPath)
 	_ = os.Remove(filepath.Join(dir, "ca-key.pem"))
-	fmt.Printf("%s local CA removed. Re-create with `policyctl trust show`.\n", green("✓"))
+	fmt.Printf("%s local CA removed. Re-create with `cloak trust show`.\n", green("✓"))
 	return nil
 }
 
@@ -182,7 +182,7 @@ func installToOSStore(certPath string) error {
 			"-k", filepath.Join(home, "Library", "Keychains", "login.keychain-db"),
 			certPath)
 	case "linux":
-		return fmt.Errorf("linux install requires root; run: sudo cp %s /usr/local/share/ca-certificates/policyd-local.crt && sudo update-ca-certificates", certPath)
+		return fmt.Errorf("linux install requires root; run: sudo cp %s /usr/local/share/ca-certificates/cloakline-local.crt && sudo update-ca-certificates", certPath)
 	}
 	return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 }
@@ -191,11 +191,11 @@ func removeFromOSStore(certPath string) error {
 	switch runtime.GOOS {
 	case "windows":
 		// certutil identifies by CN or thumbprint.
-		return run("certutil", "-user", "-delstore", "Root", "policyd local inspection CA")
+		return run("certutil", "-user", "-delstore", "Root", "cloakline local inspection CA")
 	case "darwin":
-		return run("security", "delete-certificate", "-c", "policyd local inspection CA")
+		return run("security", "delete-certificate", "-c", "cloakline local inspection CA")
 	case "linux":
-		return errors.New("linux: sudo rm /usr/local/share/ca-certificates/policyd-local.crt && sudo update-ca-certificates")
+		return errors.New("linux: sudo rm /usr/local/share/ca-certificates/cloakline-local.crt && sudo update-ca-certificates")
 	}
 	return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 }
@@ -205,8 +205,8 @@ func inOSStore(certPath string) bool {
 	// treat this as authoritative; when in doubt, print the install command.
 	switch runtime.GOOS {
 	case "windows":
-		out, err := exec.Command("certutil", "-user", "-store", "Root", "policyd local inspection CA").CombinedOutput()
-		return err == nil && strings.Contains(string(out), "policyd local inspection CA")
+		out, err := exec.Command("certutil", "-user", "-store", "Root", "cloakline local inspection CA").CombinedOutput()
+		return err == nil && strings.Contains(string(out), "cloakline local inspection CA")
 	}
 	return false
 }

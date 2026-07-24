@@ -13,7 +13,7 @@ import (
 // so the login command works offline too.
 func cmdLogin(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: policyctl login <gateway-url>")
+		return errors.New("usage: cloak login <gateway-url>")
 	}
 	gateway := strings.TrimRight(args[0], "/")
 	if !strings.HasPrefix(gateway, "http://") && !strings.HasPrefix(gateway, "https://") {
@@ -40,6 +40,6 @@ func cmdLogin(args []string) error {
 	}
 	path, _ := configPath()
 	fmt.Printf("%s saved to %s\n", green("✓"), gray(path))
-	fmt.Printf("run %s to verify.\n", cyan("policyctl doctor"))
+	fmt.Printf("run %s to verify.\n", cyan("cloak doctor"))
 	return nil
 }

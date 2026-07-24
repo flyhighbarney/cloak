@@ -1,4 +1,4 @@
-schema_version: v1.0
+﻿schema_version: v1.0
 
 # env: dev | prod. Prod tightens governance invariants (see docs/threat-model.md).
 env: dev
@@ -7,7 +7,7 @@ env: dev
 security: dev
 
 listen: ":4000"
-admin_listen: ":4001"
+admin_listen: "127.0.0.1:4001"
 
 max_body_bytes: 4194304    # 4 MiB
 # 120s tolerates a cold-start Ollama load. Cloud models finish in <10s.
@@ -21,7 +21,7 @@ request_timeout_seconds: 120
 #   block  - rejects the request with 403
 injection:
   # Score threshold at which a request is blocked with 403.
-  # Curated rule set; each rule contributes 15–45 points on match.
+  # Curated rule set; each rule contributes 15â€“45 points on match.
   # Default: 50 (single strong rule OR two moderate rules will block).
   threshold: 50
 
@@ -31,23 +31,26 @@ rate_limit:
   burst: 20
 
 # Per-budget-ref daily request caps. Reset at UTC midnight.
-# Principals reference these via principals.yaml → budget_ref.
+# Principals reference these via principals.yaml â†’ budget_ref.
 budgets:
   default:
     daily_requests: 1000    # generous starter tier
 
-# TLS inspection module — transparent scanning for CLI tools.
+# TLS inspection module â€” transparent scanning for CLI tools.
 # When enabled:
 #   1. Terminates TLS locally with a per-SNI cert issued by a locally-owned
-#      root CA (~/.config/policyd/ca/). Trust it via: policyctl trust install.
+#      root CA (~/.config/cloakline/ca/). Trust it via: cloak trust install.
 #   2. Point CLI tools at 127.0.0.1 for the AI provider hostnames listed
 #      below (via /etc/hosts or the OS proxy setting).
 #   3. Every request is scanned by the same DLP + injection detectors as
 #      the main gateway. User's auth headers pass through untouched.
 # See docs/inspect.md for the full setup.
 inspect:
-  enabled: false
-  listen: ":8443"
+  enabled: true
+  listen: ":443"
+  # ca_dir empty = use the running user's %APPDATA%\cloakline\ca\.
+  # install.ps1 runs the scheduled task as the current user, so this
+  # naturally lines up with the CA created by `cloak trust install`.
   hosts:
     - api.openai.com
     - api.anthropic.com
@@ -71,3 +74,4 @@ stages:
   - extract.text
   - dlp.tier1
   - reassemble
+

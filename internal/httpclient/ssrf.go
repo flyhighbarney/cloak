@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 // Policy controls what dials are permitted.

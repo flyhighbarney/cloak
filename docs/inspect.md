@@ -1,6 +1,6 @@
 # TLS Inspection Module
 
-The inspection module lets **any CLI tool that talks to `api.openai.com` or `api.anthropic.com`** — including Claude Code CLI, Codex CLI, `curl`, and the vendor SDKs — get scanned transparently by policyd without any code change to the tool.
+The inspection module lets **any CLI tool that talks to `api.openai.com` or `api.anthropic.com`** — including Claude Code CLI, Codex CLI, `curl`, and the vendor SDKs — get scanned transparently by cloakline without any code change to the tool.
 
 This is the same DLP/SWG (Secure Web Gateway) pattern that every corporate web filter uses for general HTTPS traffic. Applied specifically to AI-provider traffic, on the developer's own machine.
 
@@ -13,7 +13,7 @@ This is the same DLP/SWG (Secure Web Gateway) pattern that every corporate web f
         │  (which /etc/hosts sends to 127.0.0.1)
         ▼
     ┌─────────────────────────────────────┐
-    │ policyd tlsinspect on :8443         │
+    │ cloakline tlsinspect on :8443         │
     │   1. Terminates TLS with a leaf     │
     │      cert issued by our local CA    │
     │   2. Reads request body             │
@@ -27,7 +27,7 @@ This is the same DLP/SWG (Secure Web Gateway) pattern that every corporate web f
     api.anthropic.com
 ```
 
-The user's Anthropic OAuth token / subscription bearer goes through *exactly as sent*. policyd never inspects auth headers, never stores them, never logs their values.
+The user's Anthropic OAuth token / subscription bearer goes through *exactly as sent*. cloakline never inspects auth headers, never stores them, never logs their values.
 
 ## When to use it vs. the gateway proxy
 
@@ -42,7 +42,7 @@ The user's Anthropic OAuth token / subscription bearer goes through *exactly as 
 ### 1. Generate the local CA
 
 ```bash
-policyctl trust show
+cloak trust show
 ```
 
 Prints the on-disk location of `ca-cert.pem` and the platform-specific install command.
@@ -50,7 +50,7 @@ Prints the on-disk location of `ca-cert.pem` and the platform-specific install c
 ### 2. Trust the CA (per-user, reversible)
 
 ```bash
-policyctl trust install
+cloak trust install
 ```
 
 Runs the OS's certificate-trust tool with a clear consent prompt:
@@ -59,7 +59,7 @@ Runs the OS's certificate-trust tool with a clear consent prompt:
 - **macOS** — `security add-trusted-cert -k ~/Library/Keychains/login.keychain-db`
 - **Linux** — Prints the command; `update-ca-certificates` requires `sudo`
 
-Undo any time with `policyctl trust remove`.
+Undo any time with `cloak trust remove`.
 
 ### 3. Enable the module in `pipeline.yaml`
 
@@ -72,9 +72,9 @@ inspect:
     - api.anthropic.com
 ```
 
-Restart policyd. You'll see `tlsinspect.listening` in the log.
+Restart cloakline. You'll see `tlsinspect.listening` in the log.
 
-### 4. Direct AI-provider hostnames at policyd
+### 4. Direct AI-provider hostnames at cloakline
 
 Two options:
 
@@ -86,7 +86,7 @@ Two options:
 127.0.0.1 api.anthropic.com
 ```
 
-The port has to be 443 for this to work — you'll need to move policyd's inspection listener to `:443` (requires admin/root on port ≤1024).
+The port has to be 443 for this to work — you'll need to move cloakline's inspection listener to `:443` (requires admin/root on port ≤1024).
 
 **Option B — OS system proxy setting** (recommended for opt-in per-session use):
 
@@ -110,7 +110,7 @@ curl -sS https://api.anthropic.com/v1/messages \
   }'
 ```
 
-Watch `policyd`'s log — you should see `tlsinspect.forwarded` with `findings=1`. Then grep the log for `jdoe@acme.com` — must be 0 hits (email was tokenized before being sent to Anthropic).
+Watch `cloakline`'s log — you should see `tlsinspect.forwarded` with `findings=1`. Then grep the log for `jdoe@acme.com` — must be 0 hits (email was tokenized before being sent to Anthropic).
 
 ## Using it with Claude Code
 
@@ -118,11 +118,11 @@ Claude Code CLI honors the OS trust store. Once the CA is installed:
 
 ```bash
 # No env var changes needed — Claude Code will talk to api.anthropic.com
-# as usual; DNS/hosts sends the connection to policyd; policyd forwards.
+# as usual; DNS/hosts sends the connection to cloakline; cloakline forwards.
 claude -p "hello"
 ```
 
-policyd's admin dashboard at `http://localhost:4001/admin` will show the request.
+cloakline's admin dashboard at `http://localhost:4001/admin` will show the request.
 
 ## What this module deliberately does NOT do
 
@@ -141,7 +141,7 @@ Running a TLS-inspecting proxy on your own machine, with your own consent, is co
 ## How to remove everything
 
 ```bash
-policyctl trust remove
+cloak trust remove
 ```
 
-This removes the CA from the OS trust store and deletes `ca-cert.pem` + `ca-key.pem` from disk. Then set `inspect.enabled: false` in `pipeline.yaml` and restart policyd. Undo `/etc/hosts` entries manually if you added any.
+This removes the CA from the OS trust store and deletes `ca-cert.pem` + `ca-key.pem` from disk. Then set `inspect.enabled: false` in `pipeline.yaml` and restart cloakline. Undo `/etc/hosts` entries manually if you added any.

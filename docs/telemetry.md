@@ -12,71 +12,71 @@ Every gateway that let stages export their own metrics ended up with name collis
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_requests_total` | Counter | One per request, incremented on ingress. |
-| `policyd_requests_in_flight` | Gauge | Currently executing. |
-| `policyd_request_duration_seconds` | Histogram | Total time from ingress to final byte to client. |
-| `policyd_request_bytes_in` | Histogram | Bytes read from the client. |
-| `policyd_request_bytes_out` | Histogram | Bytes written to the client (streaming: cumulative). |
+| `cloakline_requests_total` | Counter | One per request, incremented on ingress. |
+| `cloakline_requests_in_flight` | Gauge | Currently executing. |
+| `cloakline_request_duration_seconds` | Histogram | Total time from ingress to final byte to client. |
+| `cloakline_request_bytes_in` | Histogram | Bytes read from the client. |
+| `cloakline_request_bytes_out` | Histogram | Bytes written to the client (streaming: cumulative). |
 
 ### Stage-level
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_stage_duration_seconds` | Histogram | Per-stage wall time. |
-| `policyd_stage_errors_total` | Counter | Failures per stage. |
-| `policyd_stage_skipped_total` | Counter | Stages skipped due to short-circuit. |
+| `cloakline_stage_duration_seconds` | Histogram | Per-stage wall time. |
+| `cloakline_stage_errors_total` | Counter | Failures per stage. |
+| `cloakline_stage_skipped_total` | Counter | Stages skipped due to short-circuit. |
 
 ### DLP
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_dlp_findings_total` | Counter | Redaction events by kind. |
-| `policyd_dlp_scan_duration_seconds` | Histogram | Per-scan time. |
-| `policyd_vault_active_sessions` | Gauge | Session vaults in `Streaming` state. |
+| `cloakline_dlp_findings_total` | Counter | Redaction events by kind. |
+| `cloakline_dlp_scan_duration_seconds` | Histogram | Per-scan time. |
+| `cloakline_vault_active_sessions` | Gauge | Session vaults in `Streaming` state. |
 
 ### Routing
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_route_decisions_total` | Counter | Decisions by chosen upstream and policy. |
-| `policyd_route_no_candidate_total` | Counter | Policy returned no upstream. |
-| `policyd_route_policy_eval_seconds` | Histogram | CEL evaluation time. |
+| `cloakline_route_decisions_total` | Counter | Decisions by chosen upstream and policy. |
+| `cloakline_route_no_candidate_total` | Counter | Policy returned no upstream. |
+| `cloakline_route_policy_eval_seconds` | Histogram | CEL evaluation time. |
 
 ### Upstream
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_upstream_requests_total` | Counter | Requests sent to each upstream. |
-| `policyd_upstream_errors_total` | Counter | Errors by upstream and error class. |
-| `policyd_upstream_duration_seconds` | Histogram | Upstream RTT (unary) or TTFB (streaming). |
-| `policyd_upstream_health` | Gauge | 1=healthy, 0=unavailable; per upstream. |
-| `policyd_upstream_tokens_in_total` | Counter | Input tokens billed by upstream. |
-| `policyd_upstream_tokens_out_total` | Counter | Output tokens billed by upstream. |
+| `cloakline_upstream_requests_total` | Counter | Requests sent to each upstream. |
+| `cloakline_upstream_errors_total` | Counter | Errors by upstream and error class. |
+| `cloakline_upstream_duration_seconds` | Histogram | Upstream RTT (unary) or TTFB (streaming). |
+| `cloakline_upstream_health` | Gauge | 1=healthy, 0=unavailable; per upstream. |
+| `cloakline_upstream_tokens_in_total` | Counter | Input tokens billed by upstream. |
+| `cloakline_upstream_tokens_out_total` | Counter | Output tokens billed by upstream. |
 
 ### Streaming
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_stream_ttfb_seconds` | Histogram | Time-to-first-byte for streaming responses. |
-| `policyd_stream_chunk_count` | Histogram | Chunks per stream. |
-| `policyd_stream_backpressure_events_total` | Counter | Times the return-path buffer hit its cap. |
+| `cloakline_stream_ttfb_seconds` | Histogram | Time-to-first-byte for streaming responses. |
+| `cloakline_stream_chunk_count` | Histogram | Chunks per stream. |
+| `cloakline_stream_backpressure_events_total` | Counter | Times the return-path buffer hit its cap. |
 
 ### Auth
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_auth_failures_total` | Counter | Failed key resolutions by reason. |
-| `policyd_auth_key_expiries_total` | Counter | Requests rejected due to expired key. |
+| `cloakline_auth_failures_total` | Counter | Failed key resolutions by reason. |
+| `cloakline_auth_key_expiries_total` | Counter | Requests rejected due to expired key. |
 
 ### Governance / integrity
 
 | Name | Type | Description |
 |---|---|---|
-| `policyd_config_hash` | Gauge | Current config content hash as a floating-point-encoded value (see caveat below). |
-| `policyd_config_load_timestamp_seconds` | Gauge | Unix time of last successful config load. |
-| `policyd_component_version` | Gauge | Info metric: dimensions carry the interface name, impl name, version. Value always 1. |
+| `cloakline_config_hash` | Gauge | Current config content hash as a floating-point-encoded value (see caveat below). |
+| `cloakline_config_load_timestamp_seconds` | Gauge | Unix time of last successful config load. |
+| `cloakline_component_version` | Gauge | Info metric: dimensions carry the interface name, impl name, version. Value always 1. |
 
-*Caveat on `policyd_config_hash`*: Prometheus gauges are floats. We emit the low 52 bits of the SHA-256 hash. This is not intended to be reversed — it exists to detect config drift across instances (same hash → same config).
+*Caveat on `cloakline_config_hash`*: Prometheus gauges are floats. We emit the low 52 bits of the SHA-256 hash. This is not intended to be reversed — it exists to detect config drift across instances (same hash → same config).
 
 ## Dimension Vocabulary
 
@@ -95,9 +95,9 @@ All allowed dimension keys, as constants in `names.go`:
 | `modality` | `text` \| `image` \| ... | Fixed (< 10) |
 | `finding_kind` | `ssn` \| `credit_card` \| `email` \| ... | Fixed (< 50) |
 | `error_class` | `rate_limit` \| `unavailable` \| `client_abort` \| `provider` \| `unknown` | Fixed (< 10) |
-| `component` | Interface name, for `policyd_component_version` | Fixed (< 30) |
-| `impl` | Implementation name, for `policyd_component_version` | Low (< 100) |
-| `version` | Version string, for `policyd_component_version` | Low |
+| `component` | Interface name, for `cloakline_component_version` | Fixed (< 30) |
+| `impl` | Implementation name, for `cloakline_component_version` | Low (< 100) |
+| `version` | Version string, for `cloakline_component_version` | Low |
 
 **Explicitly forbidden dimension keys:**
 
@@ -111,13 +111,13 @@ The linter rule blocks any call site that references a dimension key not in `nam
 
 ## Cardinality Budget
 
-Total series across the process should stay under **50,000**. This budget is monitored by a self-check metric (`policyd_metric_cardinality`) emitted every 60s that counts distinct series and warns at 40,000, refuses new dimension combinations at 50,000.
+Total series across the process should stay under **50,000**. This budget is monitored by a self-check metric (`cloakline_metric_cardinality`) emitted every 60s that counts distinct series and warns at 40,000, refuses new dimension combinations at 50,000.
 
 Rationale: a single-node Prometheus scrape at 15s interval can absorb 50k series without pain; above that we start paying with scrape time and dashboard latency.
 
 ## Redaction Coupling with Logs
 
-Every DLP finding emitted as a metric (`policyd_dlp_findings_total{finding_kind="ssn"}`) must NOT be accompanied by a log line containing the plaintext. The linter also flags any `log.*` call that references a symbol tainted with `plaintext` naming (crude but effective).
+Every DLP finding emitted as a metric (`cloakline_dlp_findings_total{finding_kind="ssn"}`) must NOT be accompanied by a log line containing the plaintext. The linter also flags any `log.*` call that references a symbol tainted with `plaintext` naming (crude but effective).
 
 ## Histograms
 
@@ -128,7 +128,7 @@ These bucket boundaries are constants shared across all size/duration histograms
 
 ## Composition-Root Wiring
 
-At `cmd/policyd/main.go` startup:
+At `cmd/cloakline/main.go` startup:
 
 1. Construct one Prometheus registry.
 2. Register all metrics from `names.go` with default (empty) dimension values.

@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 const (

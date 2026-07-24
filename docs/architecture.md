@@ -148,7 +148,7 @@ SLOs are stated per payload class in `slos.md`. Overhead is a function of payloa
 | `internal/obs/log/` | Redacting structured logger. | (stdlib only) |
 | `internal/obs/meter/` | `Meter` implementation over Prometheus. | `api`, `prometheus/client_golang`. |
 | `internal/config/` | YAML+CEL loader, validator, IR compiler. | `api`, `policy/cel`. |
-| `cmd/policyd/` | Composition root. Wires everything. | Everything above. |
+| `cmd/cloakline/` | Composition root. Wires everything. | Everything above. |
 
 `internal/api/` never imports anything else in the project. If a change to `api` would require it to import a lower package, the design is wrong.
 

@@ -54,8 +54,8 @@ MCP is a peer transport, not a "gateway feature." When it lands, tool arguments 
 
 | Case | Support |
 |---|---|
-| `policyctl chat` interactive | 🕓 T-CLI |
-| `policyctl audit tail` | 🕓 T-CLI |
+| `cloak chat` interactive | 🕓 T-CLI |
+| `cloak audit tail` | 🕓 T-CLI |
 
 ## Rationale for the ❌ Cells
 

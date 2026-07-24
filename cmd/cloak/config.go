@@ -21,7 +21,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "policyctl", "config.yaml"), nil
+	return filepath.Join(dir, "cloak", "config.yaml"), nil
 }
 
 // loadConfig reads the config file. Environment variables override on-disk.
@@ -42,7 +42,7 @@ func loadConfig() (*clientConfig, error) {
 		c.APIKey = v
 	}
 	if c.Gateway == "" && c.APIKey == "" {
-		return c, errors.New("no gateway configured — run `policyctl login <url>` or set POLICYD_GATEWAY")
+		return c, errors.New("no gateway configured — run `cloak login <url>` or set POLICYD_GATEWAY")
 	}
 	return c, nil
 }

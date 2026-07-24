@@ -1,6 +1,6 @@
 # Deployment — Solo Founder Quickstart
 
-Deploy `policyd` on a single small VPS with auto-HTTPS. Total cost: **$0–$6/month** until first customer.
+Deploy `cloakline` on a single small VPS with auto-HTTPS. Total cost: **$0–$6/month** until first customer.
 
 ## What you get
 
@@ -40,8 +40,8 @@ docker compose version
 ## First deployment
 
 ```bash
-git clone https://github.com/YOU/policyd.git
-cd policyd/deploy
+git clone https://github.com/YOU/cloakline.git
+cd cloakline/deploy
 cp .env.example .env
 ```
 
@@ -124,7 +124,7 @@ Settings → Models → Custom OpenAI Base URL: `https://gateway.your-domain.com
 | See logs | `./deploy.sh --logs` |
 | Check status | `./deploy.sh --status` |
 | Roll back to previous image | `./deploy.sh --rollback` |
-| Restart policyd only | `docker compose restart policyd` |
+| Restart cloakline only | `docker compose restart cloakline` |
 | Restart Caddy only | `docker compose restart caddy` |
 
 ## Add a customer
@@ -161,7 +161,7 @@ Send them the key and the base URL. That's it.
 The only stateful files are `configs/*.yaml`. Push them (encrypted) to a private git repo daily. Example crontab:
 
 ```
-0 4 * * * cd /home/deploy/policyd && git add configs/ && git commit -m "config snapshot $(date -Iseconds)" && git push
+0 4 * * * cd /home/deploy/cloakline && git add configs/ && git commit -m "config snapshot $(date -Iseconds)" && git push
 ```
 
 ## Cost ledger
@@ -179,12 +179,12 @@ If any line grows past $10/mo before first paying customer, revisit.
 
 ## Security posture in this deployment
 
-- `policyd` binds only inside the docker network. Public traffic must traverse Caddy.
+- `cloakline` binds only inside the docker network. Public traffic must traverse Caddy.
 - Caddy terminates TLS with Let's Encrypt; automatic renewals.
 - `/metrics` is basic-auth-gated (never exposed unauthenticated).
 - Cloud API keys are held in `.env` on the VPS, injected as env vars. Never in git, never in logs.
 - Docker containers run as non-root (via the distroless base image).
-- `policyd`'s SSRF-hardened outbound client blocks metadata endpoints (`169.254.169.254`) even if a config regression tries to reach them.
+- `cloakline`'s SSRF-hardened outbound client blocks metadata endpoints (`169.254.169.254`) even if a config regression tries to reach them.
 
 See [../docs/threat-model.md](../docs/threat-model.md) for the complete threat model.
 

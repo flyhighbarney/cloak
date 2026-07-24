@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"policyd/internal/api"
-	"policyd/internal/auth"
-	"policyd/internal/obs/log"
-	"policyd/internal/obs/meter"
+	"cloakline/internal/api"
+	"cloakline/internal/auth"
+	"cloakline/internal/obs/log"
+	"cloakline/internal/obs/meter"
 )
 
 const APIVersion = api.TransportAPIVersion
@@ -318,7 +318,7 @@ func (t *Transport) writeUnary(w http.ResponseWriter, resp *api.Response) {
 	}
 	text := concatText(resp.Full.Parts)
 	out := outResponse{
-		ID:      "policyd-" + string(resp.RequestID),
+		ID:      "cloakline-" + string(resp.RequestID),
 		Object:  "chat.completion",
 		Created: time.Now().Unix(),
 		Model:   resp.Provider.Model,
@@ -360,7 +360,7 @@ func (t *Transport) writeStream(w http.ResponseWriter, r *http.Request, ctx cont
 			return
 		}
 		out := outStreamChunk{
-			ID:      "policyd-" + string(resp.RequestID),
+			ID:      "cloakline-" + string(resp.RequestID),
 			Object:  "chat.completion.chunk",
 			Created: time.Now().Unix(),
 			Model:   resp.Provider.Model,

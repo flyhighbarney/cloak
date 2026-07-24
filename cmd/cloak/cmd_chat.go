@@ -17,7 +17,7 @@ func cmdChat(args []string) error {
 	}
 	prompt := strings.TrimSpace(strings.Join(fs.Args(), " "))
 	if prompt == "" {
-		return errors.New(`usage: policyctl chat "your prompt here"`)
+		return errors.New(`usage: cloak chat "your prompt here"`)
 	}
 	cfg, err := loadConfig()
 	if err != nil {

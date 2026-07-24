@@ -1,11 +1,11 @@
-# policyd Desktop
+# cloakline Desktop
 
-A native Mac + Windows companion for the [policyd](https://github.com/flyhighbarney/policyd) gateway. Built with [Wails](https://wails.io/) (Go backend + web frontend, single binary).
+A native Mac + Windows companion for the [cloakline](https://github.com/flyhighbarney/cloakline) gateway. Built with [Wails](https://wails.io/) (Go backend + web frontend, single binary).
 
 ## What it does
 
 - **Compose window** for AI prompts with **local redaction preview**. As you type, sensitive strings (SSNs, credit cards, emails, API keys, PEM blocks) are highlighted *before* the prompt ever leaves your machine.
-- **Send to AI** button routes the prompt through your policyd gateway. Both OpenAI-shaped (`/v1/chat/completions`) and Anthropic-shaped (`/v1/messages`) models are supported.
+- **Send to AI** button routes the prompt through your cloakline gateway. Both OpenAI-shaped (`/v1/chat/completions`) and Anthropic-shaped (`/v1/messages`) models are supported.
 - **Settings panel** stores gateway URL + virtual key in `~/.config/policyctl/config.yaml` (shared with the CLI).
 - **Live health pill** in the header shows whether the gateway is reachable.
 
@@ -35,9 +35,9 @@ wails build              # cross-compile disabled; run on target OS
 
 Output lands in `desktop/build/bin/`:
 
-- **macOS:** `policyd-desktop.app` bundle (unsigned — see below).
-- **Windows:** `policyd-desktop.exe`.
-- **Linux:** `policyd-desktop`.
+- **macOS:** `cloakline-desktop.app` bundle (unsigned — see below).
+- **Windows:** `cloakline-desktop.exe`.
+- **Linux:** `cloakline-desktop`.
 
 ## Code signing (Mac)
 
@@ -50,9 +50,9 @@ The `.app` bundle works locally without signing — right-click → Open on firs
 
 ## Config
 
-The desktop app shares its config file with `policyctl`. Set it up once and either tool works.
+The desktop app shares its config file with `cloak`. Set it up once and either tool works.
 
-If you ran `policyctl login <url>` already, the desktop app finds the config automatically. Otherwise use the ⚙ (Settings) button in the header.
+If you ran `cloak login <url>` already, the desktop app finds the config automatically. Otherwise use the ⚙ (Settings) button in the header.
 
 ## What it deliberately does not do
 

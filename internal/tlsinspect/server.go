@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"policyd/internal/obs/log"
+	"cloakline/internal/obs/log"
 )
 
 // Config controls the inspection server behavior.

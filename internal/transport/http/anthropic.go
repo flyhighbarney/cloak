@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-	"policyd/internal/api"
-	"policyd/internal/obs/log"
-	"policyd/internal/obs/meter"
+	"cloakline/internal/api"
+	"cloakline/internal/obs/log"
+	"cloakline/internal/obs/meter"
 )
 
 // handleMessages is the Anthropic Messages API-shaped ingress.
@@ -162,7 +162,7 @@ func (t *Transport) writeAntUnary(w http.ResponseWriter, resp *api.Response) {
 	}
 	text := concatText(resp.Full.Parts)
 	out := antOutResponse{
-		ID:    "policyd-" + string(resp.RequestID),
+		ID:    "cloakline-" + string(resp.RequestID),
 		Type:  "message",
 		Role:  "assistant",
 		Model: resp.Provider.Model,
@@ -198,7 +198,7 @@ func (t *Transport) writeAntStream(w http.ResponseWriter, r *http.Request, ctx c
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
-	msgID := "policyd-" + string(resp.RequestID)
+	msgID := "cloakline-" + string(resp.RequestID)
 
 	writeEvent := func(name string, payload any) bool {
 		buf, err := json.Marshal(payload)

@@ -200,7 +200,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "policyctl", "config.yaml"), nil
+	return filepath.Join(dir, "cloak", "config.yaml"), nil
 }
 
 func maskKey(k string) string {

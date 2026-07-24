@@ -1,0 +1,211 @@
+{{define "keys.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cloakline · API keys</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0f1115;
+      color: #e6e6ea;
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    header {
+      background: #171923;
+      border-bottom: 1px solid #262a36;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+    header .meta { color: #7f8798; font-size: 12px; }
+    main { padding: 24px; max-width: 900px; margin: 0 auto; }
+
+    nav.tabs { margin-bottom: 20px; }
+    nav.tabs a {
+      display: inline-block;
+      color: #a0a4b4;
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    nav.tabs a.active { background: #262a36; color: #e6e6ea; }
+    nav.tabs a:hover { color: #e6e6ea; }
+
+    .panel {
+      background: #171923;
+      border: 1px solid #262a36;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .panel h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #e6e6ea;
+      margin: 0 0 6px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .panel p { color: #a0a4b4; font-size: 13px; margin: 0 0 16px 0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      text-align: left;
+      color: #7f8798;
+      font-weight: 500;
+      padding: 8px 10px;
+      border-bottom: 1px solid #262a36;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    tbody td { padding: 10px; border-bottom: 1px solid #1e2130; }
+    tbody tr:last-child td { border-bottom: 0; }
+
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+    .muted { color: #7f8798; }
+
+    form.inline { display: inline; }
+    input[type=text], input[type=password] {
+      background: #0f1115;
+      color: #e6e6ea;
+      border: 1px solid #262a36;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      width: 100%;
+    }
+    input[type=text]:focus, input[type=password]:focus {
+      outline: none;
+      border-color: #55c8e0;
+    }
+    button {
+      background: #55c8e0;
+      color: #0f1115;
+      border: 0;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    button:hover { background: #6fd6ec; }
+    button.danger { background: #ff6b6b; color: #0f1115; }
+    button.danger:hover { background: #ff8a8a; }
+
+    .add-form { display: grid; grid-template-columns: 200px 1fr auto; gap: 10px; align-items: center; }
+    .add-form label { font-size: 12px; color: #7f8798; }
+
+    .flash {
+      background: #3d1a1a;
+      color: #ff8a8a;
+      border: 1px solid #5a2222;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .callout {
+      background: #1a2540;
+      border: 1px solid #2a3550;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #a1b4ff;
+    }
+
+    footer { padding: 24px; color: #7f8798; font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>cloakline · admin</h1>
+    <div class="meta">
+      <span class="mono">{{.Version}}</span>
+      &nbsp;·&nbsp;
+      <span>{{.Now}}</span>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs">
+      <a href="/admin">Activity</a>
+      <a href="/admin/keys" class="active">API keys</a>
+      <a href="/admin/prefs">Preferences</a>
+    </nav>
+
+    {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+
+    <div class="callout">
+      Keys are stored via <span class="mono">{{.VaultBackend}}</span>.
+      {{if eq .VaultBackend "windows-dpapi"}}Encrypted with DPAPI under your Windows user account — only this login can decrypt.{{end}}
+      {{if eq .VaultBackend "memory"}}<strong>In-memory only</strong> — keys are lost on restart. Persistent storage is unavailable on this platform.{{end}}
+    </div>
+
+    <div class="panel">
+      <h2>Stored keys</h2>
+      <p>These keys are used when cloakline forwards traffic to a provider (gateway mode, <span class="mono">:4000</span>) and by <span class="mono">cloak launch</span> when it starts a CLI. Values are never displayed after they are stored.</p>
+
+      {{if .Rows}}
+      <table>
+        <thead>
+          <tr>
+            <th>Provider ID</th>
+            <th>Value</th>
+            <th style="text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Rows}}
+          <tr>
+            <td class="mono">{{.Provider}}</td>
+            <td class="mono muted">{{.Masked}}</td>
+            <td style="text-align:right">
+              <form class="inline" method="post" action="/admin/keys/delete">
+                <input type="hidden" name="csrf" value="{{$.CSRFToken}}">
+                <input type="hidden" name="provider" value="{{.Provider}}">
+                <button class="danger" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="muted" style="margin: 0;">No keys stored yet.</p>
+      {{end}}
+    </div>
+
+    <div class="panel">
+      <h2>Add or replace a key</h2>
+      <p>Provider ID must match an entry in <span class="mono">configs/providers.yaml</span> (e.g. <span class="mono">openai-default</span>, <span class="mono">anthropic-default</span>). Setting a key for an existing provider replaces the old value.</p>
+
+      <form method="post" action="/admin/keys" class="add-form">
+        <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+        <label>Provider ID</label>
+        <input type="text" name="provider" placeholder="openai-default" autocomplete="off" required>
+        <span></span>
+
+        <label>API key</label>
+        <input type="password" name="key" placeholder="sk-…" autocomplete="off" required>
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  </main>
+
+  <footer>
+    Keys are per-user, per-machine. Never synced. Never logged.
+  </footer>
+</body>
+</html>
+{{end}}

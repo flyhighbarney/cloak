@@ -11,7 +11,7 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 const APIVersion = api.PolicyEngineAPIVersion

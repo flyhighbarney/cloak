@@ -1,7 +1,7 @@
 // Package patterns is the shared DLP pattern registry.
 //
 // Both the runtime DLP stage (internal/stage/dlptier1) and the CLI's
-// standalone scanner (cmd/policyctl scan) call into this package so
+// standalone scanner (cmd/cloak scan) call into this package so
 // detection behavior is identical whether a finding surfaces at request
 // time or during a pre-send dev-side scan.
 package patterns
@@ -9,7 +9,7 @@ package patterns
 import (
 	"regexp"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 // Pattern is one detection rule.
@@ -26,13 +26,23 @@ type Pattern struct {
 // findings in this order.
 func All() []Pattern {
 	return []Pattern{
-		{Kind: api.PIISSN, Regex: reSSN},
-		{Kind: api.PIICreditCard, Regex: reCC, Validate: IsLuhnValid},
-		{Kind: api.PIIEmail, Regex: reEmail},
+		// High-tier (credential-shaped) — one-way redact.
 		{Kind: api.PIIAPIKey, Regex: reGenericAPIKey},
 		{Kind: api.PIIAWSKey, Regex: reAWSKey},
 		{Kind: api.PIIGitHubToken, Regex: reGitHubToken},
 		{Kind: api.PIIPrivateKey, Regex: rePrivateKeyHeader},
+
+		// High-tier (structured PII that we intent-check).
+		{Kind: api.PIICreditCard, Regex: reCC, Validate: IsLuhnValid},
+
+		// Medium-tier — round-trip via vault.
+		{Kind: api.PIISSN, Regex: reSSN},
+		{Kind: api.PIIEmail, Regex: reEmail},
+		{Kind: api.PIIPhone, Regex: rePhone},
+
+		// Low-tier — pass through, flag on dashboard.
+		{Kind: api.PIIIPAddress, Regex: reIPAddr},
+		{Kind: api.PIIURLPath, Regex: reURLPath},
 	}
 }
 
@@ -44,6 +54,20 @@ var (
 	reAWSKey           = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
 	reGitHubToken      = regexp.MustCompile(`\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}\b`)
 	rePrivateKeyHeader = regexp.MustCompile(`-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----`)
+
+	// US + international phone: (123) 456-7890, 123-456-7890, +1 415 555 0100.
+	// The leading anchor is deliberately loose; false positives on year ranges
+	// like "1990-2020" are rejected by the Validate hook.
+	rePhone = regexp.MustCompile(`(?:\+?\d{1,3}[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?)\d{3}[\s.\-]?\d{4}\b`)
+
+	// IPv4 dotted-quad. IPv6 is intentionally omitted for v2 — too many false
+	// positives against colons in code snippets.
+	reIPAddr = regexp.MustCompile(`\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b`)
+
+	// URL that carries a path or query. Bare hostnames are ignored — the
+	// path is the tell that this might be an internal service ref
+	// (e.g. https://staging.internal/api/v1/customers/42).
+	reURLPath = regexp.MustCompile(`\bhttps?://[A-Za-z0-9.\-]+(?::\d+)?/[^\s"'<>)]{1,200}`)
 )
 
 // IsLuhnValid strips separators from raw and applies the Luhn checksum.

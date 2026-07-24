@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"policyd/internal/dlp/patterns"
+	"cloakline/internal/dlp/patterns"
 )
 
 // cmdScan runs DLP patterns against a file or stdin. No gateway needed.
@@ -23,7 +23,7 @@ func cmdScan(args []string) error {
 	}
 	rest := fs.Args()
 	if len(rest) == 0 {
-		return errors.New("usage: policyctl scan <file>|- [--json]")
+		return errors.New("usage: cloak scan <file>|- [--json]")
 	}
 
 	source, input, err := readInput(rest[0])

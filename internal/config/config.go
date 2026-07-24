@@ -16,9 +16,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"policyd/internal/api"
-	"policyd/internal/auth"
-	"policyd/internal/policy/dsl"
+	"cloakline/internal/api"
+	"cloakline/internal/auth"
+	"cloakline/internal/keyvault"
+	"cloakline/internal/policy/dsl"
 )
 
 const (
@@ -276,7 +277,7 @@ func Load(dir string) (*IR, error) {
 		Env:            pf.Env,
 		SecurityMode:   pf.Security,
 		Listen:         defaultString(pf.Listen, ":4000"),
-		AdminListen:    defaultString(pf.AdminListen, ":4001"),
+		AdminListen:    defaultString(pf.AdminListen, "127.0.0.1:4001"),
 		MaxBodyBytes:   defaultInt64(pf.MaxBodyBytes, 4<<20),
 		RequestTimeout: time.Duration(defaultInt(pf.RequestTimeoutSec, 30)) * time.Second,
 		Pipeline:       PipelineIR{Stages: pf.Stages},
@@ -492,16 +493,26 @@ func LoadIntoAuth(ir *IR) (*auth.Store, error) {
 	return store, nil
 }
 
-// APIKeyForProvider fetches the plaintext key from the environment.
-// The env-var name comes from the IR; the value never sits in a file.
+// APIKeyForProvider fetches the plaintext key for a provider.
+//
+// Resolution order:
+//  1. Dashboard-managed OS keyring entry (keyed by provider ID).
+//  2. Environment variable named by ProviderIR.APIKeyEnv.
+//
+// Order matters: a keyring entry always wins so the dashboard is the
+// user's single source of truth once they've pasted a key. If neither
+// is set, ErrConfigInvalid is returned with a message pointing at the
+// env-var name, which is the setup step most existing users know.
 func APIKeyForProvider(p ProviderIR) (string, error) {
+	if v, err := keyvault.Get(string(p.ID)); err == nil && v != "" {
+		return v, nil
+	} else if err != nil && !errors.Is(err, keyvault.ErrNotFound) {
+		return "", fmt.Errorf("keyvault lookup for %s: %w", p.ID, err)
+	}
 	v := os.Getenv(p.APIKeyEnv)
 	if v == "" {
-		return "", fmt.Errorf("%w: env %s not set for provider %s",
+		return "", fmt.Errorf("%w: no key in dashboard vault and env %s not set for provider %s",
 			api.ErrConfigInvalid, p.APIKeyEnv, p.ID)
-	}
-	if strings.HasPrefix(v, "sk-") && !strings.HasPrefix(v, "sk-gw-") {
-		// It's a real cloud key. Good — that's what we expect.
 	}
 	return v, nil
 }

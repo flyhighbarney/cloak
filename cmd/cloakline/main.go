@@ -1,4 +1,4 @@
-// Command policyd is the composition root. It wires stages, router,
+// Command cloakline is the composition root. It wires stages, router,
 // upstreams, vault, transport, and the engine, enforces version invariants,
 // and runs the process until SIGTERM/SIGINT.
 package main
@@ -16,27 +16,30 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"policyd/internal/adminui"
-	"policyd/internal/api"
-	"policyd/internal/audit"
-	"policyd/internal/config"
-	"policyd/internal/engine"
-	"policyd/internal/httpclient"
-	"policyd/internal/obs/log"
-	"policyd/internal/obs/meter"
-	policycel "policyd/internal/policy/cel"
-	routercel "policyd/internal/router/cel"
-	"policyd/internal/stage/budget"
-	"policyd/internal/stage/dlptier1"
-	"policyd/internal/stage/extracttext"
-	"policyd/internal/stage/injection"
-	"policyd/internal/stage/normalize"
-	"policyd/internal/stage/reassemble"
-	"policyd/internal/tlsinspect"
-	httpxport "policyd/internal/transport/http"
-	anthropicup "policyd/internal/upstream/anthropic"
-	openaiup "policyd/internal/upstream/openai"
-	"policyd/internal/vault/session"
+	"cloakline/internal/adminui"
+	"cloakline/internal/api"
+	"cloakline/internal/audit"
+	"cloakline/internal/config"
+	"cloakline/internal/engine"
+	"cloakline/internal/httpclient"
+	"cloakline/internal/keyvault"
+	"cloakline/internal/notify"
+	"cloakline/internal/obs/log"
+	"cloakline/internal/prefs"
+	"cloakline/internal/obs/meter"
+	policycel "cloakline/internal/policy/cel"
+	routercel "cloakline/internal/router/cel"
+	"cloakline/internal/stage/budget"
+	"cloakline/internal/stage/dlptier1"
+	"cloakline/internal/stage/extracttext"
+	"cloakline/internal/stage/injection"
+	"cloakline/internal/stage/normalize"
+	"cloakline/internal/stage/reassemble"
+	"cloakline/internal/tlsinspect"
+	httpxport "cloakline/internal/transport/http"
+	anthropicup "cloakline/internal/upstream/anthropic"
+	openaiup "cloakline/internal/upstream/openai"
+	"cloakline/internal/vault/session"
 )
 
 func main() {
@@ -58,6 +61,15 @@ func run() error {
 	// Log level from env; defaults to info.
 	lvl := parseLogLevel(os.Getenv("LOG_LEVEL"))
 	logger := log.New(lvl)
+
+	// Install the OS-native keyring backend for dashboard-managed API
+	// keys. On platforms without native support this is a no-op and
+	// the in-memory backend stays active — the daemon still boots.
+	if name, err := keyvault.Install(); err != nil {
+		logger.Warn("keyvault.install_failed", log.Fields{"backend": name, "error": err.Error()})
+	} else {
+		logger.Info("keyvault.installed", log.Fields{"backend": name})
+	}
 
 	// Load config.
 	ir, err := config.Load(*configDir)
@@ -102,16 +114,25 @@ func run() error {
 		}
 	}
 
-	// Upstreams. Only OpenAI supported in Phase 1.
+	// Upstreams. Providers whose API key isn't available at startup
+	// are silently skipped (warn-logged), not fatal. This lets
+	// providers.yaml ship every reasonable default uncommented — the
+	// running machine registers only the ones it can actually use.
+	// See docs/session-notes.md finding #7.
 	var upstreams []api.Upstream
 	costs := make(map[api.UpstreamID]api.CostView)
 	for _, p := range ir.Providers {
+		key, err := config.APIKeyForProvider(p)
+		if err != nil {
+			logger.Warn("provider.skipped", log.Fields{
+				"id":     string(p.ID),
+				"kind":   string(p.Kind),
+				"reason": "no api key available (env var unset and no vault entry)",
+			})
+			continue
+		}
 		switch p.Kind {
 		case api.KindOpenAI:
-			key, err := config.APIKeyForProvider(p)
-			if err != nil {
-				return err
-			}
 			ad := openaiup.New(openaiup.Config{
 				ID:         p.ID,
 				BaseURL:    p.BaseURL,
@@ -123,10 +144,6 @@ func run() error {
 			}, httpCli)
 			upstreams = append(upstreams, ad)
 		case api.KindAnthropic:
-			key, err := config.APIKeyForProvider(p)
-			if err != nil {
-				return err
-			}
 			ad := anthropicup.New(anthropicup.Config{
 				ID:         p.ID,
 				BaseURL:    p.BaseURL,
@@ -138,7 +155,12 @@ func run() error {
 			}, httpCli)
 			upstreams = append(upstreams, ad)
 		default:
-			return fmt.Errorf("provider %s: kind %q not supported yet", p.ID, p.Kind)
+			logger.Warn("provider.skipped", log.Fields{
+				"id":     string(p.ID),
+				"kind":   string(p.Kind),
+				"reason": "kind not supported yet",
+			})
+			continue
 		}
 		costs[p.ID] = api.CostView{
 			CostPer1KIn:  p.CostIn,
@@ -150,7 +172,15 @@ func run() error {
 		})
 	}
 	if len(upstreams) == 0 {
-		return fmt.Errorf("no upstreams configured")
+		// Not fatal in tlsinspect mode: the transparent-inspection path
+		// forwards to the real upstream host directly and uses the
+		// CLI's own auth headers — the providers.yaml catalog is not
+		// consulted. If the user later enables gateway mode (:4000
+		// routing to a configured provider) they'll need to uncomment
+		// an entry in providers.yaml, but until then, boot cleanly.
+		logger.Warn("upstreams.none_configured", log.Fields{
+			"note": "gateway routing at :4000 will 502; tlsinspect at :443/:8443 still works",
+		})
 	}
 
 	// Vault.
@@ -207,10 +237,21 @@ func run() error {
 	}
 
 	// Admin dashboard.
-	adminHandler, err := adminui.New(recorder, "v0.1.0")
+	// Open the AES-encrypted prefs store. Failure is non-fatal — the
+	// dashboard shows a warning and DLP falls back to tier defaults.
+	prefsStore, prefsErr := prefs.Open()
+	if prefsErr != nil {
+		logger.Warn("prefs.open_failed", log.Fields{"error": prefsErr.Error()})
+		prefsStore = nil
+	}
+	adminHandler, err := adminui.New(recorder, "v0.1.0", prefsStore)
 	if err != nil {
 		return fmt.Errorf("adminui: %w", err)
 	}
+	// Notifier fires system balloon tips when HIGH-tier content is redacted.
+	// Closed at process exit (currently a no-op on non-Windows).
+	notifier := notify.New()
+	defer notifier.Close()
 
 	// Transport (constructed early so we can version-check).
 	metricsHandler := promhttp.HandlerFor(promReg, promhttp.HandlerOpts{})
@@ -258,12 +299,12 @@ func run() error {
 
 	// Optional: start the TLS inspection module as a background goroutine.
 	if ir.Inspect.Enabled {
-		if err := startInspect(ctx, ir, dlpActions, logger); err != nil {
+		if err := startInspect(ctx, ir, dlpActions, prefsStore, logger, adminHandler, notifier); err != nil {
 			return fmt.Errorf("tlsinspect: %w", err)
 		}
 	}
 
-	logger.Info("policyd.starting", log.Fields{
+	logger.Info("cloakline.starting", log.Fields{
 		"listen":       ir.Listen,
 		"admin_listen": ir.AdminListen,
 		"config_hash":  ir.Hash,
@@ -271,7 +312,7 @@ func run() error {
 	if err := transport.Serve(ctx, eng); err != nil {
 		return fmt.Errorf("transport: %w", err)
 	}
-	logger.Info("policyd.stopped", log.Fields{"uptime_sec": int(time.Since(ir.Loaded).Seconds())})
+	logger.Info("cloakline.stopped", log.Fields{"uptime_sec": int(time.Since(ir.Loaded).Seconds())})
 	return nil
 }
 
@@ -313,26 +354,62 @@ func buildSSRFPolicy(ir *config.IR) httpclient.Policy {
 // startInspect boots the TLS inspection listener in a goroutine. Failure
 // during boot returns immediately; runtime errors after boot are logged
 // but do not kill the main gateway.
-func startInspect(ctx context.Context, ir *config.IR, actions dlptier1.ActionMap, logger *log.Logger) error {
+//
+// adminHandler and notifier are used to wire the "Allow session"
+// notification flow:
+//  1. When a HIGH-tier finding is redacted, a nonce is issued by
+//     adminHandler.IssueNonce and embedded in an allow URL.
+//  2. notifier.Notify fires a platform alert (Windows balloon tip)
+//     with that URL as the "Allow session" action.
+//  3. When the user clicks the button, their browser opens the allow URL.
+//  4. adminHandler serves GET /admin/session/allow, consumes the nonce,
+//     and calls handler.OptOutSession(sessionKey) to grant the opt-out.
+func startInspect(
+	ctx context.Context,
+	ir *config.IR,
+	actions dlptier1.ActionMap,
+	prefsStore *prefs.Store,
+	logger *log.Logger,
+	adminHandler *adminui.Handler,
+	notifier notify.Notifier,
+) error {
 	caDir := ir.Inspect.CADir
 	if caDir == "" {
 		home, err := os.UserConfigDir()
 		if err != nil {
 			return err
 		}
-		caDir = home + string(os.PathSeparator) + "policyd" + string(os.PathSeparator) + "ca"
+		caDir = home + string(os.PathSeparator) + "cloakline" + string(os.PathSeparator) + "ca"
 	}
 	ca, err := tlsinspect.LoadOrCreate(caDir)
 	if err != nil {
 		return err
 	}
-	handler := tlsinspect.NewHandler(tlsinspect.HandlerConfig{
+	handlerCfg := tlsinspect.HandlerConfig{
 		Logger:             logger,
 		Meter:              noopInspectMeter{},
 		MaxBodyBytes:       ir.MaxBodyBytes,
 		DLPActions:         inspectActionResolver{actions},
 		InjectionThreshold: ir.Injection.Threshold,
+	}
+	if prefsStore != nil {
+		handlerCfg.Prefs = prefsStore
+	}
+	handler := tlsinspect.NewHandler(handlerCfg)
+
+	// Wire session opt-out: adminHandler needs handler.OptOutSession so
+	// it can grant permission when a nonce is redeemed.
+	adminHandler.WireSessionOptOut(handler)
+
+	// Wire the notify callback: issue a nonce, build the allow URL, fire
+	// the platform notification. adminBase derives from AdminListen.
+	adminBase := adminListenBase(ir.AdminListen)
+	handler.SetNotifyFunc(func(kind, sessionKey string) {
+		nonce := adminHandler.IssueNonce(sessionKey)
+		allowURL := adminBase + "/admin/session/allow?nonce=" + nonce
+		notifier.Notify(kind, allowURL)
 	})
+
 	srv, err := tlsinspect.NewServer(tlsinspect.Config{
 		Listen: ir.Inspect.Listen,
 		Hosts:  ir.Inspect.Hosts,
@@ -346,6 +423,19 @@ func startInspect(ctx context.Context, ir *config.IR, actions dlptier1.ActionMap
 		}
 	}()
 	return nil
+}
+
+// adminListenBase turns ir.AdminListen (":4001" or "127.0.0.1:4001")
+// into "http://127.0.0.1:4001" for embedding in allow URLs.
+func adminListenBase(listen string) string {
+	if listen == "" {
+		return "http://127.0.0.1:4001"
+	}
+	if strings.HasPrefix(listen, ":") {
+		return "http://127.0.0.1" + listen
+	}
+	// Already has a host component.
+	return "http://" + listen
 }
 
 // noopInspectMeter satisfies tlsinspect.MeterFacade until we plug in the

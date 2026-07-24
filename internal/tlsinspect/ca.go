@@ -74,8 +74,8 @@ func generate(certPath, keyPath, dir string) (*CA, error) {
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			CommonName:   "policyd local inspection CA",
-			Organization: []string{"policyd (local)"},
+			CommonName:   "cloakline local inspection CA",
+			Organization: []string{"cloakline (local)"},
 		},
 		NotBefore:             now.Add(-1 * time.Hour),
 		NotAfter:              now.AddDate(10, 0, 0),
@@ -151,12 +151,12 @@ func randSerial() (*big.Int, error) {
 	return rand.Int(rand.Reader, limit)
 }
 
-const readmeText = `This directory contains the local inspection CA for policyd.
+const readmeText = `This directory contains the local inspection CA for cloakline.
 
 WHAT THIS IS
 ------------
 ca-cert.pem is a self-signed root certificate. When installed in your
-operating system's trust store, it lets policyd terminate TLS locally so
+operating system's trust store, it lets cloakline terminate TLS locally so
 it can scan the body of your AI-provider requests for PII and secrets
 before they leave your machine.
 
@@ -170,8 +170,8 @@ their trust store.
 REVOCATION
 ----------
 To stop trusting this CA:
-    policyctl trust remove
-or manually remove "policyd local inspection CA" from your OS trust store,
+    cloak trust remove
+or manually remove "cloakline local inspection CA" from your OS trust store,
 and delete this entire directory.
 
 DO NOT SHARE

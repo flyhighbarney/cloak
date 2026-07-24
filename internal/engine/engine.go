@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"policyd/internal/api"
-	"policyd/internal/audit"
-	"policyd/internal/obs/log"
-	"policyd/internal/obs/meter"
-	"policyd/internal/stage/dlptier1"
-	"policyd/internal/vault/session"
+	"cloakline/internal/api"
+	"cloakline/internal/audit"
+	"cloakline/internal/obs/log"
+	"cloakline/internal/obs/meter"
+	"cloakline/internal/stage/dlptier1"
+	"cloakline/internal/vault/session"
 )
 
 // Engine implements api.Engine.

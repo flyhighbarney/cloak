@@ -1,4 +1,4 @@
-# policyd
+# cloakline
 
 **Use AI without exposing your company's private information.**
 
@@ -10,7 +10,7 @@ A local-first AI security gateway. Drop-in OpenAI / Anthropic compatible. Redact
 
 ```bash
 # 1. Scan a file for anything you shouldn't paste into ChatGPT (offline, no server needed):
-policyctl scan contract.docx
+cloak scan contract.docx
 
 # 2. Point any OpenAI/Anthropic SDK at your gateway:
 export OPENAI_BASE_URL=https://gateway.your-company.com/v1
@@ -26,7 +26,7 @@ That's the whole product.
 ## Who this is for
 
 ### 👩‍💻 Developers
-You're already using Cursor / Claude Code / Copilot. This adds a safety layer that catches secrets and PII *before* they reach the model — without changing your workflow. Standalone `policyctl scan` gives you a pre-flight check you can run against any file.
+You're already using Cursor / Claude Code / Copilot. This adds a safety layer that catches secrets and PII *before* they reach the model — without changing your workflow. Standalone `cloak scan` gives you a pre-flight check you can run against any file.
 
 ### 🧑‍💼 CTOs / Engineering Leaders
 Fixed monthly cost. No per-request pricing you can't cap. Admin dashboard shows exactly what got blocked. Self-host in your VPC in 5 minutes with the included Docker Compose recipe.
@@ -53,7 +53,7 @@ Open source under Apache 2.0. Read the [threat model](docs/threat-model.md). Run
 
 ## How it compares
 
-| | **policyd** | LiteLLM | Portkey | Direct-to-OpenAI |
+| | **cloakline** | LiteLLM | Portkey | Direct-to-OpenAI |
 |---|---|---|---|---|
 | Deployment | Single Go binary + Caddy | Requires Postgres + Redis | SaaS (or heavy self-host) | N/A |
 | DLP | ✅ 4 action modes, reversible tokens | Third-party sidecar | Regex only | ❌ |
@@ -74,10 +74,10 @@ Open source under Apache 2.0. Read the [threat model](docs/threat-model.md). Run
 ### For a developer trying it locally
 
 ```bash
-git clone https://github.com/flyhighbarney/policyd.git
-cd policyd
+git clone https://github.com/flyhighbarney/cloakline.git
+cd cloakline
 export OPENAI_API_KEY=sk-your-real-openai-key
-go run ./cmd/policyd --config ./configs
+go run ./cmd/cloakline --config ./configs
 ```
 
 Now point any OpenAI SDK at `http://localhost:4000/v1` with the dev virtual key `sk-gw-dev-alpha-000000000000` from [`configs/principals.yaml`](configs/principals.yaml).
@@ -89,31 +89,31 @@ See [`deploy/README.md`](deploy/README.md). One VPS, one command, HTTPS via Let'
 ### For a developer who just wants the CLI
 
 ```bash
-go install policyd/cmd/policyctl@latest
-policyctl scan file.py
+go install cloakline/cmd/policyctl@latest
+cloak scan file.py
 ```
 
 Or with the local build:
 
 ```bash
 make build-policyctl
-./bin/policyctl scan file.py
+./bin/cloak scan file.py
 ```
 
 ---
 
-## The CLI (`policyctl`)
+## The CLI (`cloak`)
 
 Two modes: **standalone** (works offline) and **client** (talks to a running gateway).
 
 ```
-policyctl scan file.py                       # offline: find PII/secrets in a file
-cat contract.txt | policyctl scan -          # offline: scan stdin
-policyctl scan --json file.py                # offline: JSON output for tooling
+cloak scan file.py                       # offline: find PII/secrets in a file
+cat contract.txt | cloak scan -          # offline: scan stdin
+cloak scan --json file.py                # offline: JSON output for tooling
 
-policyctl login https://gateway.example.com  # save credentials
-policyctl doctor                             # validate config + probe gateway
-policyctl chat "summarize this contract"     # send a prompt through the gateway
+cloak login https://gateway.example.com  # save credentials
+cloak doctor                             # validate config + probe gateway
+cloak chat "summarize this contract"     # send a prompt through the gateway
 ```
 
 `scan` runs the same DLP patterns the gateway uses. Use it in pre-commit hooks, CI, or just before you paste a snippet into ChatGPT.
@@ -161,7 +161,7 @@ This is a deliberate architectural constraint. When you outgrow it, [`docs/tripw
 - Prometheus metrics with fixed vocabulary
 - Read-only admin dashboard
 - Docker Compose + Caddy deployment recipe
-- `policyctl` CLI (scan, chat, doctor, login)
+- `cloak` CLI (scan, chat, doctor, login)
 
 **Planned (each has a tripwire in [docs/tripwires.md](docs/tripwires.md)):**
 - Anthropic Claude Code / Cursor via Anthropic BYOK — works via T-ANTHRO

@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 const APIVersion = api.UpstreamAPIVersion

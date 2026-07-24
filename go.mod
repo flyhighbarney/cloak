@@ -1,4 +1,4 @@
-module policyd
+module cloakline
 
 go 1.22
 

@@ -1,18 +1,24 @@
 schema_version: v1.0
 
 providers:
-  # Cloud OpenAI (commented for offline demo — uncomment when you have a real key).
-  # - id: openai-default
-  #   kind: openai
-  #   base_url: https://api.openai.com
-  #   api_key_env: OPENAI_API_KEY
-  #   model: gpt-4o-mini
-  #   max_context: 128000
-  #   cost_per_1k_in: 0.150
-  #   cost_per_1k_out: 0.600
-  #   local: false
+  # Cloud OpenAI. Auto-disabled if OPENAI_API_KEY isn't set (or
+  # `openai-default` isn't in the dashboard vault). Setting either
+  # activates gateway-mode routing at :4000 to api.openai.com.
+  - id: openai-default
+    kind: openai
+    base_url: https://api.openai.com
+    api_key_env: OPENAI_API_KEY
+    model: gpt-4o-mini
+    max_context: 128000
+    cost_per_1k_in: 0.150
+    cost_per_1k_out: 0.600
+    local: false
 
-  # OFFLINE — Ollama running on this host.
+  # OFFLINE — Ollama running on this host. Auto-disabled at startup
+  # if OLLAMA_API_KEY isn't set (see cmd/cloakline/main.go provider
+  # loop). To enable: install Ollama, then either
+  #   export OLLAMA_API_KEY=unused       (any non-empty value works)
+  # or paste "unused" via /admin/keys under provider id `ollama-local`.
   - id: ollama-local
     kind: openai
     base_url: http://localhost:11434
@@ -23,17 +29,21 @@ providers:
     cost_per_1k_out: 0.0
     local: true
 
-  # Claude via api.anthropic.com. Commented in the no-keys demo so the
-  # gateway boots without ANTHROPIC_API_KEY. Uncomment when you have a key.
-  # - id: anthropic-default
-  #   kind: anthropic
-  #   base_url: https://api.anthropic.com
-  #   api_key_env: ANTHROPIC_API_KEY
-  #   model: claude-3-5-sonnet-20241022
-  #   max_context: 200000
-  #   cost_per_1k_in: 3.00
-  #   cost_per_1k_out: 15.00
-  #   local: false
+  # Claude via api.anthropic.com. Auto-disabled if ANTHROPIC_API_KEY
+  # isn't set (or `anthropic-default` isn't in the dashboard vault).
+  # NOTE: cloakline's transparent-inspection path (tlsinspect) does
+  # NOT use this entry — it forwards to the real Anthropic upstream
+  # using the CLI's own auth headers. Provider entries here are only
+  # for the OpenAI-compatible gateway path on :4000.
+  - id: anthropic-default
+    kind: anthropic
+    base_url: https://api.anthropic.com
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-3-5-sonnet-20241022
+    max_context: 200000
+    cost_per_1k_in: 3.00
+    cost_per_1k_out: 15.00
+    local: false
 
   # OFFLINE MODE — Ollama on localhost.
   # Ollama exposes an OpenAI-compatible endpoint at /v1/chat/completions,

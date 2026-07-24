@@ -12,8 +12,8 @@ import (
 	"regexp"
 	"strings"
 
-	"policyd/internal/api"
-	"policyd/internal/stage/extracttext"
+	"cloakline/internal/api"
+	"cloakline/internal/stage/extracttext"
 )
 
 const (

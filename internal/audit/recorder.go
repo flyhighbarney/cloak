@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 // Verdict summarizes what happened to a request.
@@ -53,12 +53,20 @@ type Entry struct {
 }
 
 // Recorder is a bounded ring buffer of entries. Safe for concurrent use.
+//
+// Lifetime counters (fields prefixed `life`) accumulate across the whole
+// process life and are the source of the Brave-style dashboard tiles.
+// They reset on restart — the ring buffer is not durable by design.
 type Recorder struct {
 	mu       sync.Mutex
 	entries  []Entry // circular
 	head     int     // index of the next write
 	capacity int
 	total    uint64 // lifetime counter for stats
+
+	lifeSecretsCaught     uint64
+	lifePIIRedacted       uint64
+	lifeInjectionsBlocked uint64
 }
 
 // New returns a Recorder that holds the most-recent `capacity` entries.
@@ -74,15 +82,28 @@ func New(capacity int) *Recorder {
 }
 
 // Record appends an entry. The oldest entry is overwritten if full.
+// The lifetime counters advance atomically with the ring write.
 func (r *Recorder) Record(e Entry) {
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now().UTC()
 	}
+	hadSecret, hadPII := Classify(e.DLPFindings)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.entries[r.head] = e
 	r.head = (r.head + 1) % r.capacity
 	r.total++
+	if hadSecret {
+		r.lifeSecretsCaught++
+	}
+	if hadPII {
+		r.lifePIIRedacted++
+	}
+	if e.Verdict == VerdictBlockedDLP || e.Verdict == VerdictBlockedPolicy {
+		if e.InjectionScore > 0 {
+			r.lifeInjectionsBlocked++
+		}
+	}
 }
 
 // Recent returns up to `n` most-recent entries, newest first.
@@ -118,6 +139,10 @@ func (r *Recorder) Recent(n int) []Entry {
 }
 
 // Stats surfaces summary counters for the dashboard header.
+//
+// The `Buffered*` fields are computed from the ring-buffer window.
+// The `Lifetime*` fields are monotonic since process start and back
+// the Brave-style tiles on the dashboard.
 type Stats struct {
 	Total          uint64
 	Allowed        int
@@ -130,13 +155,23 @@ type Stats struct {
 	Errors         int
 	Buffered       int
 	Capacity       int
+
+	LifetimeSecretsCaught     uint64
+	LifetimePIIRedacted       uint64
+	LifetimeInjectionsBlocked uint64
 }
 
 // Stats returns aggregated counts over the buffered window.
 func (r *Recorder) Stats() Stats {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	s := Stats{Total: r.total, Capacity: r.capacity}
+	s := Stats{
+		Total:                     r.total,
+		Capacity:                  r.capacity,
+		LifetimeSecretsCaught:     r.lifeSecretsCaught,
+		LifetimePIIRedacted:       r.lifePIIRedacted,
+		LifetimeInjectionsBlocked: r.lifeInjectionsBlocked,
+	}
 	for _, e := range r.entries {
 		if e.Timestamp.IsZero() {
 			continue
@@ -162,6 +197,18 @@ func (r *Recorder) Stats() Stats {
 		}
 	}
 	return s
+}
+
+// EstimatedTimeSaved is the vanity tile heuristic. It assumes each
+// caught secret would have cost ~5 minutes of incident-response time
+// (rotation, notification, log audit) and each blocked injection ~15
+// minutes (dependent on downstream blast radius). Numbers are labels,
+// not a promise — the copy on the tile makes that clear.
+func (s Stats) EstimatedTimeSaved() time.Duration {
+	const secretCost = 5 * time.Minute
+	const injectionCost = 15 * time.Minute
+	return time.Duration(s.LifetimeSecretsCaught)*secretCost +
+		time.Duration(s.LifetimeInjectionsBlocked)*injectionCost
 }
 
 // VerdictFromError classifies a canonical error into a Verdict.

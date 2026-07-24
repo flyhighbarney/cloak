@@ -5,51 +5,90 @@ schema_version: v1.0
 # Format:
 #   - name: (optional) human title, shown in admin dashboard
 #     if:   "detects <kind>" OR "injection_score >= N"
-#     then: allow | warn | redact | block
+#     then: allow | warn | redact | block | redact_one_way
 #
-# Kinds you can `detects`: ssn, credit_card, email, phone, person_name,
-# api_key, private_key, github_token, aws_key, or any_pii for the default.
+# Kinds you can `detects`:
+#   High tier   — api_key, aws_key, github_token, private_key,
+#                 password, credit_card
+#   Medium tier — ssn, email, phone
+#   Low tier    — ip_address, url_path, person_name
+#   Special     — any_pii (sets the default action)
 #
-# Rules in this file OVERRIDE the dlp/injection sections in pipeline.yaml.
+# Rules in this file override the defaults derived from the tier map.
+# The dashboard `/admin/prefs` panel further overrides these at runtime.
 #
-# Default posture: "paste anything, we tokenize" for PII (safe round-trip
-# via the session vault). Credentials stay at block — a leaked credential
-# is unrecoverable damage.
+# --------------------------------------------------------------------
+# DEFAULT POSTURE (as of v2)
+#
+#   HIGH-tier findings are one-way redacted with a static marker:
+#     "[REDACTED_API_KEY]", "[REDACTED_AWS_KEY]", etc.
+#     Plaintext NEVER enters the vault, logs, or audit ring. The AI
+#     sees the marker in the request and its reply mentions the
+#     marker back — that's how the user learns their credential was
+#     masked. There is a separate confirmation flow (see docs/policy-
+#     tiers.md) for passwords / credit-cards that were intentionally
+#     pasted; those can be sent through after y/n approval in the CLI.
+#
+#   MEDIUM-tier findings are tokenized round-trip via the per-request
+#     session vault (plaintext lives ONLY inside the current request).
+#     The client sees its real values back in the response.
+#
+#   LOW-tier findings pass through untouched but are flagged in the
+#     dashboard so the user can see what would have been redacted at
+#     a higher tier.
+# --------------------------------------------------------------------
 
 rules:
-  # ---- Personal data: tokenize + restore on the response ----
+  # ---- HIGH tier: credential-shaped. One-way redact, never restore. ----
+  - name: "Mask API keys / generic secrets (never leak, never store)"
+    if: detects api_key
+    then: redact_one_way
+
+  - name: "Mask AWS access keys"
+    if: detects aws_key
+    then: redact_one_way
+
+  - name: "Mask GitHub tokens"
+    if: detects github_token
+    then: redact_one_way
+
+  - name: "Mask private-key PEM headers"
+    if: detects private_key
+    then: redact_one_way
+
+  # Credit cards and passwords: if the user intentionally pasted them
+  # ("my password is X", "credentials: pw: Y"), the confirmation flow
+  # asks the user y/n in the CLI. Otherwise they get the same one-way
+  # redaction as other high-tier findings.
+  - name: "Mask credit cards (confirm on intent)"
+    if: detects credit_card
+    then: redact_one_way
+
+  - name: "Mask labelled passwords (confirm on intent)"
+    if: detects password
+    then: redact_one_way
+
+  # ---- MEDIUM tier: personal data. Round-trip via vault. ----
   - name: "Tokenize US SSNs (round-trip via session vault)"
     if: detects ssn
-    then: redact
-
-  - name: "Tokenize credit card numbers"
-    if: detects credit_card
     then: redact
 
   - name: "Tokenize emails"
     if: detects email
     then: redact
 
-  - name: "Tokenize everything else that looks like PII"
-    if: detects any_pii
+  - name: "Tokenize phone numbers"
+    if: detects phone
     then: redact
 
-  # ---- Credentials: never leave the network. Blocked outright. ----
-  - name: "Block API keys and secrets"
-    if: detects api_key
-    then: block
+  # ---- LOW tier: allowed but flagged in dashboard. ----
+  - name: "Flag IP addresses (visible in dashboard, not modified)"
+    if: detects ip_address
+    then: allow
 
-  - name: "Block AWS access keys"
-    if: detects aws_key
-    then: block
-
-  - name: "Block GitHub tokens"
-    if: detects github_token
-    then: block
-
-  - name: "Block private keys"
-    if: detects private_key
-    then: block
+  - name: "Flag URLs with paths (internal service refs)"
+    if: detects url_path
+    then: allow
 
   # ---- Guardrail against obvious model manipulation ----
   - name: "Block obvious model manipulation"

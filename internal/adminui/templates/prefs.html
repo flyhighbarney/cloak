@@ -1,0 +1,117 @@
+{{define "prefs.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cloakline · Preferences</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0f1115; color: #e6e6ea; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    header { background: #171923; border-bottom: 1px solid #262a36; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+    header .meta { color: #7f8798; font-size: 12px; }
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+    nav.tabs { margin-bottom: 20px; }
+    nav.tabs a { display: inline-block; color: #a0a4b4; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+    nav.tabs a.active { background: #262a36; color: #e6e6ea; }
+    nav.tabs a:hover { color: #e6e6ea; }
+
+    .panel { background: #171923; border: 1px solid #262a36; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .panel h2 { font-size: 14px; font-weight: 600; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.6px; }
+    .panel p { color: #a0a4b4; font-size: 13px; margin: 0 0 16px 0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { text-align: left; color: #7f8798; font-weight: 500; padding: 8px 10px; border-bottom: 1px solid #262a36; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
+    tbody td { padding: 10px; border-bottom: 1px solid #1e2130; vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: 0; }
+
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+    .muted { color: #7f8798; }
+
+    .tier { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+    .t-high { background: #3d1a1a; color: #ff8a8a; }
+    .t-med  { background: #1a3540; color: #55c8e0; }
+    .t-low  { background: #1e3a24; color: #7ed957; }
+
+    select { background: #0f1115; color: #e6e6ea; border: 1px solid #262a36; border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; }
+    select:focus { outline: none; border-color: #55c8e0; }
+    button { background: #55c8e0; color: #0f1115; border: 0; border-radius: 6px; padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; font-size: 13px; }
+    button:hover { background: #6fd6ec; }
+
+    .flash { background: #3d1a1a; color: #ff8a8a; border: 1px solid #5a2222; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+    .callout { background: #1a2540; border: 1px solid #2a3550; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #a1b4ff; }
+    .warning { background: #3a2e15; border-color: #5a4520; color: #f7c948; }
+
+    footer { padding: 24px; color: #7f8798; font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>cloakline · admin</h1>
+    <div class="meta"><span class="mono">{{.Version}}</span> &nbsp;·&nbsp; <span>{{.Now}}</span></div>
+  </header>
+
+  <main>
+    <nav class="tabs">
+      <a href="/admin">Activity</a>
+      <a href="/admin/keys">API keys</a>
+      <a href="/admin/prefs" class="active">Preferences</a>
+    </nav>
+
+    {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+
+    {{if not .Available}}
+    <div class="callout warning">Preferences store is unavailable on this platform in this build. Changes here will not persist.</div>
+    {{else}}
+    <div class="callout">Preferences are encrypted at rest in <span class="mono">%LOCALAPPDATA%\cloakline\prefs.bin</span> using a per-user AES-256-GCM key. They override the built-in tier defaults and any <span class="mono">rules.yaml</span> entries.</div>
+    {{end}}
+
+    <div class="panel">
+      <h2>Per-kind redaction</h2>
+      <p>Pick an override per kind, or leave as "default" to follow the tier default (see <span class="mono">docs/policy-tiers.md</span>).</p>
+
+      <form method="post" action="/admin/prefs">
+        <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 140px">Kind</th>
+              <th style="width: 60px">Tier</th>
+              <th>What it is</th>
+              <th style="width: 100px">Default</th>
+              <th style="width: 160px">Override</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Rows}}
+            <tr>
+              <td class="mono">{{.Kind}}</td>
+              <td><span class="tier t-{{if eq .Tier "high"}}high{{else if eq .Tier "medium"}}med{{else}}low{{end}}">{{.Tier}}</span></td>
+              <td class="muted">{{.Description}}</td>
+              <td class="mono muted">{{.Default}}</td>
+              <td>
+                <select name="kind_{{.Kind}}">
+                  <option value="" {{if eq .Current ""}}selected{{end}}>default</option>
+                  <option value="allow"          {{if eq .Current "allow"}}selected{{end}}>allow</option>
+                  <option value="redact"         {{if eq .Current "redact"}}selected{{end}}>redact</option>
+                  <option value="redact_one_way" {{if eq .Current "redact_one_way"}}selected{{end}}>redact_one_way</option>
+                  <option value="warn"           {{if eq .Current "warn"}}selected{{end}}>warn</option>
+                  <option value="block"          {{if eq .Current "block"}}selected{{end}}>block</option>
+                </select>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        <div style="margin-top: 20px; text-align: right;">
+          <button type="submit">Save preferences</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer>Preferences take effect on the next request. No restart needed.</footer>
+</body>
+</html>
+{{end}}

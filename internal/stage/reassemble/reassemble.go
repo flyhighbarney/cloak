@@ -10,9 +10,9 @@ import (
 	"context"
 	"fmt"
 
-	"policyd/internal/api"
-	"policyd/internal/stage/dlptier1"
-	"policyd/internal/stage/extracttext"
+	"cloakline/internal/api"
+	"cloakline/internal/stage/dlptier1"
+	"cloakline/internal/stage/extracttext"
 )
 
 const (

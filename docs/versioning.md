@@ -31,7 +31,7 @@ type Xxx interface {
 
 ### Composition-Root Compatibility Table
 
-`cmd/policyd/versions.go` (Phase 0 stub):
+`cmd/cloakline/versions.go` (Phase 0 stub):
 
 ```go
 var supported = map[string]VersionRange{

@@ -22,7 +22,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"policyd/internal/api"
+	"cloakline/internal/api"
 )
 
 // File is the on-disk shape of rules.yaml.
@@ -128,7 +128,7 @@ func (c *Compiled) applyDLPRule(idx int, r RawRule, kind, action string) error {
 	} else {
 		piiKind := api.PIIKind(kind)
 		if !isKnownKind(piiKind) {
-			return fmt.Errorf("%w: rule[%d] unknown detection kind %q. Known: ssn, credit_card, email, phone, person_name, api_key, private_key, github_token, aws_key, or any_pii",
+			return fmt.Errorf("%w: rule[%d] unknown detection kind %q. Known: ssn, credit_card, email, phone, person_name, api_key, private_key, github_token, aws_key, password, ip_address, url_path, or any_pii",
 				api.ErrConfigInvalid, idx, kind)
 		}
 		c.DLPActions[piiKind] = act
@@ -182,7 +182,8 @@ func isKnownKind(k api.PIIKind) bool {
 	switch k {
 	case api.PIISSN, api.PIICreditCard, api.PIIEmail, api.PIIPhone,
 		api.PIIPersonName, api.PIIAPIKey, api.PIIPrivateKey,
-		api.PIIGitHubToken, api.PIIAWSKey:
+		api.PIIGitHubToken, api.PIIAWSKey, api.PIIPassword,
+		api.PIIIPAddress, api.PIIURLPath:
 		return true
 	}
 	return false

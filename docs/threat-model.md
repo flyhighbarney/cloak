@@ -23,7 +23,7 @@ Cost model: real cloud API keys, held server-side, are the highest-value secret.
 
 **Attack.** An attacker with any ability to influence config (config-file write, injection into an admin endpoint, malicious PR merged into a config repo) points an upstream at `http://169.254.169.254/latest/meta-data/` on AWS, `http://metadata.google.internal/`, or an internal RDS/Redis endpoint. The gateway then dutifully forwards user prompts to that endpoint, or worse, exfiltrates cloud IAM credentials into a log or response.
 
-**Detection.** Outbound HTTP to any host not on the compiled allowlist. Metric: `policyd_upstream_requests_total{upstream_kind=...}` with unknown value.
+**Detection.** Outbound HTTP to any host not on the compiled allowlist. Metric: `cloakline_upstream_requests_total{upstream_kind=...}` with unknown value.
 
 **Mitigation.**
 - Scheme allowlist: `https` in prod; `http` only when the resolved host is loopback (`127.0.0.0/8` or `::1`) *and* that upstream is explicitly declared as a local model.
@@ -184,7 +184,7 @@ Cost model: real cloud API keys, held server-side, are the highest-value secret.
 
 **Attack.** Not an external attack — an internal correctness bug that costs money. On a 5xx from an upstream, if we retry a non-idempotent completion, we get charged twice for the same request.
 
-**Detection.** `policyd_upstream_requests_total` diverging from `policyd_requests_total` by more than the expected retry ratio.
+**Detection.** `cloakline_upstream_requests_total` diverging from `cloakline_requests_total` by more than the expected retry ratio.
 
 **Mitigation.**
 - Upstream adapters MUST NOT retry non-idempotent completions on 5xx.
@@ -222,7 +222,7 @@ These are not attacks — they are ways a legitimate operator disables or miscon
 
 **Detection.**
 - Boot-time invariant: config marked `env: prod` must have DLP stages enabled. Refuse to boot otherwise.
-- `policyd_config_hash` metric — drift between prod instances is visible.
+- `cloakline_config_hash` metric — drift between prod instances is visible.
 
 **Mitigation.**
 - Signed config bundles (deferred; documented tripwire). Prod configs require a signature from the security team.
@@ -238,7 +238,7 @@ These are not attacks — they are ways a legitimate operator disables or miscon
 **Attack scenario.** A developer sets `LOG_LEVEL=debug` "just for a day" to debug a customer report; the flag persists; prompts and PII flow into logs indefinitely.
 
 **Detection.**
-- `policyd_log_level` gauge exposes the current level as a dimension.
+- `cloakline_log_level` gauge exposes the current level as a dimension.
 - Refuse to boot when verbose logging combines with `env: prod`.
 
 **Mitigation.**
@@ -254,7 +254,7 @@ These are not attacks — they are ways a legitimate operator disables or miscon
 
 **Attack scenario.** Multi-instance deployment; one instance runs a stale config with looser DLP. Traffic distributed across them means some requests are unprotected.
 
-**Detection.** `policyd_config_hash` gauge differs between instances (visible on any dashboard that groups by instance).
+**Detection.** `cloakline_config_hash` gauge differs between instances (visible on any dashboard that groups by instance).
 
 **Mitigation.**
 - Config hash is emitted as a metric.
@@ -269,7 +269,7 @@ These are not attacks — they are ways a legitimate operator disables or miscon
 
 **Attack scenario.** A CEL routing policy is edited in-place; the change disables a security check inadvertently.
 
-**Detection.** Version bump on `Policy.APIVersion`, or a hash of the policy source, both surfaced as `policyd_component_version{component="Policy",impl=...,version=...}`.
+**Detection.** Version bump on `Policy.APIVersion`, or a hash of the policy source, both surfaced as `cloakline_component_version{component="Policy",impl=...,version=...}`.
 
 **Mitigation.**
 - Each policy has an `id` and `api_version`; the composition root logs both at load.
