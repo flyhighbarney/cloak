@@ -45,7 +45,7 @@ npx cloakline install
 
 That does the following:
 
-1. Downloads the platform-native binaries + scripts from the [latest GitHub Release](https://github.com/flyhighbarney/policyd/releases) into a stable location:
+1. Downloads the platform-native binaries + scripts from the [latest GitHub Release](https://github.com/flyhighbarney/cloak/releases) into a stable location:
    - Windows: `%LOCALAPPDATA%\cloakline\`
    - macOS: `~/.cloakline/`
 2. Runs the platform's `bootstrap` script with `--skip-build` (binaries are already downloaded), which handles CA trust, hosts file, scheduled task / LaunchAgent, pf redirect on macOS, and verification.

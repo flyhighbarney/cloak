@@ -29,11 +29,8 @@ const fs              = require('fs');
 const { spawnSync }   = require('child_process');
 const https           = require('https');
 
-// The GitHub repo name may differ from the npm package name — the
-// repo is currently at flyhighbarney/policyd (its historical name)
-// while the product/npm name is cloakline. Override with the
-// CLOAKLINE_REPO env var if you fork.
-const REPO       = process.env.CLOAKLINE_REPO || 'flyhighbarney/policyd';
+// Override with the CLOAKLINE_REPO env var if you fork.
+const REPO       = process.env.CLOAKLINE_REPO || 'flyhighbarney/cloak';
 const RELEASE_TAG = process.env.CLOAKLINE_TAG || 'latest';
 
 // --- paths ---------------------------------------------------------------

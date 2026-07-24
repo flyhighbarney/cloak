@@ -18,8 +18,8 @@ anthropic = ["anthropic>=0.30"]
 all       = ["openai>=1.0", "anthropic>=0.30"]
 
 [project.urls]
-Homepage = "https://github.com/flyhighbarney/policyd"
-Issues   = "https://github.com/flyhighbarney/policyd/issues"
+Homepage = "https://github.com/flyhighbarney/cloak"
+Issues   = "https://github.com/flyhighbarney/cloak/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["policyd_sdk"]

@@ -5,14 +5,14 @@
   "version": "0.1.0",
   "publisher": "policyd",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/flyhighbarney/policyd",
+  "homepage": "https://github.com/flyhighbarney/cloak",
   "repository": {
     "type": "git",
-    "url": "https://github.com/flyhighbarney/policyd.git",
+    "url": "https://github.com/flyhighbarney/cloak.git",
     "directory": "vscode"
   },
   "bugs": {
-    "url": "https://github.com/flyhighbarney/policyd/issues"
+    "url": "https://github.com/flyhighbarney/cloak/issues"
   },
   "engines": {
     "vscode": "^1.80.0"
