@@ -55,7 +55,7 @@ func New(cfg Config) *Stage {
 	if cfg.Threshold <= 0 {
 		cfg.Threshold = 50
 	}
-	rules := builtinRules()
+	rules := BuiltinRules()
 	rules = append(rules, cfg.Extra...)
 	return &Stage{cfg: cfg, rules: rules}
 }
@@ -105,9 +105,31 @@ func (s *Stage) Run(ctx context.Context, r *api.Request, bus api.SignalBus) erro
 	return nil
 }
 
+// ScoreResult is the return of Score — total plus which rules matched.
+type ScoreResult struct {
+	Score   int
+	Matches []Match
+}
+
+// Score runs `text` against every rule and returns the total plus which
+// rules matched. Exposed for callers outside the DAG (the TLS inspection
+// module uses this directly for inline scoring without going through the
+// full engine).
+func Score(text string, rules []Rule) ScoreResult {
+	lower := strings.ToLower(text)
+	var res ScoreResult
+	for _, r := range rules {
+		if r.Regex.MatchString(lower) {
+			res.Score += r.Weight
+			res.Matches = append(res.Matches, Match{RuleID: r.ID, Weight: r.Weight})
+		}
+	}
+	return res
+}
+
 // -------- built-in rule set --------
 
-func builtinRules() []Rule {
+func BuiltinRules() []Rule {
 	return []Rule{
 		// Direct override attempts — high confidence.
 		{ID: "override.ignore_previous", Weight: 50, Regex: regexp.MustCompile(`\b(ignore|disregard|forget)\b[^.!?\n]{0,40}\b(previous|prior|earlier|above|all)\b[^.!?\n]{0,40}\b(instructions?|prompts?|rules?|directives?|context)\b`)},

@@ -34,6 +34,8 @@ func main() {
 		err = cmdKeys(args)
 	case "tail":
 		err = cmdTail(args)
+	case "trust":
+		err = cmdTrust(args)
 	case "version", "--version", "-v":
 		fmt.Printf("policyctl %s\n", Version)
 	case "help", "--help", "-h":
@@ -83,6 +85,14 @@ COMMANDS
 
     tail        Live-stream recent audit events from the gateway.
                 (coming soon — for now open /admin in your browser)
+
+    trust       Manage the local inspection CA (used by the TLS inspection
+                module for transparent scanning of AI CLI traffic).
+
+                    policyctl trust show      # print path + install cmd
+                    policyctl trust install   # add to OS trust store
+                    policyctl trust status    # is the CA trusted?
+                    policyctl trust remove    # revoke and delete
 
     version     Print CLI version.
 

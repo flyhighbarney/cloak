@@ -55,6 +55,7 @@ type IR struct {
 	RequestTimeout time.Duration
 	DLP           DLPIR
 	Injection     InjectionIR
+	Inspect       InspectIR
 	Providers     []ProviderIR
 	Principals    []PrincipalIR
 	Policies      []PolicyIR
@@ -83,6 +84,15 @@ type DLPIR struct {
 // InjectionIR is the compiled prompt-injection detection configuration.
 type InjectionIR struct {
 	Threshold int
+}
+
+// InspectIR is the compiled TLS-inspection module configuration.
+// When Enabled is false, the module is not started at all.
+type InspectIR struct {
+	Enabled bool
+	Listen  string   // e.g. ":8443"
+	Hosts   []string // hostnames to inspect (api.openai.com, api.anthropic.com, ...)
+	CADir   string   // directory holding ca-cert.pem / ca-key.pem
 }
 
 type ProviderIR struct {
@@ -134,6 +144,14 @@ type pipelineFile struct {
 	Injection         *injectionSection          `yaml:"injection"`
 	Budgets           map[string]budgetEntry     `yaml:"budgets"`
 	RateLimit         *rateLimitSection          `yaml:"rate_limit"`
+	Inspect           *inspectSection            `yaml:"inspect"`
+}
+
+type inspectSection struct {
+	Enabled bool     `yaml:"enabled"`
+	Listen  string   `yaml:"listen"`
+	Hosts   []string `yaml:"hosts"`
+	CADir   string   `yaml:"ca_dir"`
 }
 
 type dlpSection struct {
@@ -308,6 +326,14 @@ func Load(dir string) (*IR, error) {
 	if pf.RateLimit != nil {
 		ir.RateLimit.PerSecond = pf.RateLimit.RequestsPerSecond
 		ir.RateLimit.Burst = pf.RateLimit.Burst
+	}
+
+	// TLS inspection module.
+	if pf.Inspect != nil {
+		ir.Inspect.Enabled = pf.Inspect.Enabled
+		ir.Inspect.Listen = defaultString(pf.Inspect.Listen, ":8443")
+		ir.Inspect.Hosts = pf.Inspect.Hosts
+		ir.Inspect.CADir = pf.Inspect.CADir
 	}
 
 	// Optional rules.yaml DSL overlay. When present, its DLP action + injection

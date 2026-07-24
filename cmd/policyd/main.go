@@ -32,6 +32,7 @@ import (
 	"policyd/internal/stage/injection"
 	"policyd/internal/stage/normalize"
 	"policyd/internal/stage/reassemble"
+	"policyd/internal/tlsinspect"
 	httpxport "policyd/internal/transport/http"
 	anthropicup "policyd/internal/upstream/anthropic"
 	openaiup "policyd/internal/upstream/openai"
@@ -255,6 +256,13 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Optional: start the TLS inspection module as a background goroutine.
+	if ir.Inspect.Enabled {
+		if err := startInspect(ctx, ir, dlpActions, logger); err != nil {
+			return fmt.Errorf("tlsinspect: %w", err)
+		}
+	}
+
 	logger.Info("policyd.starting", log.Fields{
 		"listen":       ir.Listen,
 		"admin_listen": ir.AdminListen,
@@ -300,6 +308,59 @@ func buildSSRFPolicy(ir *config.IR) httpclient.Policy {
 	p.AllowSchemes = schList
 	p.AllowLoopback = anyLocal
 	return p
+}
+
+// startInspect boots the TLS inspection listener in a goroutine. Failure
+// during boot returns immediately; runtime errors after boot are logged
+// but do not kill the main gateway.
+func startInspect(ctx context.Context, ir *config.IR, actions dlptier1.ActionMap, logger *log.Logger) error {
+	caDir := ir.Inspect.CADir
+	if caDir == "" {
+		home, err := os.UserConfigDir()
+		if err != nil {
+			return err
+		}
+		caDir = home + string(os.PathSeparator) + "policyd" + string(os.PathSeparator) + "ca"
+	}
+	ca, err := tlsinspect.LoadOrCreate(caDir)
+	if err != nil {
+		return err
+	}
+	handler := tlsinspect.NewHandler(tlsinspect.HandlerConfig{
+		Logger:             logger,
+		Meter:              noopInspectMeter{},
+		MaxBodyBytes:       ir.MaxBodyBytes,
+		DLPActions:         inspectActionResolver{actions},
+		InjectionThreshold: ir.Injection.Threshold,
+	})
+	srv, err := tlsinspect.NewServer(tlsinspect.Config{
+		Listen: ir.Inspect.Listen,
+		Hosts:  ir.Inspect.Hosts,
+	}, ca, handler, logger)
+	if err != nil {
+		return err
+	}
+	go func() {
+		if err := srv.Serve(ctx); err != nil {
+			logger.Error("tlsinspect.exited", log.Fields{"err": err.Error()})
+		}
+	}()
+	return nil
+}
+
+// noopInspectMeter satisfies tlsinspect.MeterFacade until we plug in the
+// real Prometheus one.
+type noopInspectMeter struct{}
+
+func (noopInspectMeter) Counter(_ api.MetricName, _ map[api.DimKey]string) {}
+
+// inspectActionResolver maps kind names to configured DLP actions.
+type inspectActionResolver struct {
+	m dlptier1.ActionMap
+}
+
+func (r inspectActionResolver) Action(kind string) string {
+	return r.m.Action(api.PIIKind(kind)).String()
 }
 
 func hostOf(rawURL string) string {

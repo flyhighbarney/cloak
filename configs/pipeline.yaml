@@ -36,6 +36,22 @@ budgets:
   default:
     daily_requests: 1000    # generous starter tier
 
+# TLS inspection module — transparent scanning for CLI tools.
+# When enabled:
+#   1. Terminates TLS locally with a per-SNI cert issued by a locally-owned
+#      root CA (~/.config/policyd/ca/). Trust it via: policyctl trust install.
+#   2. Point CLI tools at 127.0.0.1 for the AI provider hostnames listed
+#      below (via /etc/hosts or the OS proxy setting).
+#   3. Every request is scanned by the same DLP + injection detectors as
+#      the main gateway. User's auth headers pass through untouched.
+# See docs/inspect.md for the full setup.
+inspect:
+  enabled: false
+  listen: ":8443"
+  hosts:
+    - api.openai.com
+    - api.anthropic.com
+
 dlp:
   # Default posture: tokenize personal data so the round-trip works
   # transparently. Credentials still block outright.
