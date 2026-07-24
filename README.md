@@ -8,15 +8,18 @@ A local-first AI security gateway. Drop-in OpenAI / Anthropic compatible. Redact
 
 ## The 60-second install
 
-**Windows — one command from a fresh clone:**
+**One command from a fresh clone:**
 
-```powershell
+```bash
 git clone https://github.com/flyhighbarney/cloakline.git
 cd cloakline
+# Windows:
 .\scripts\bootstrap.ps1
+# macOS:
+./scripts/bootstrap.sh
 ```
 
-That script self-elevates, builds both binaries, trusts the local CA, registers cloakline as a scheduled task, adds the two hosts-file entries, and verifies the daemon is listening before it declares success. Requires Go 1.22+ on PATH. Full walkthrough and manual steps in [docs/GUIDE.md](docs/GUIDE.md).
+Each script builds both binaries, trusts the local CA, registers cloakline for auto-start, adds hosts-file entries, and verifies the daemon is listening before declaring success. Windows uses a Scheduled Task on `:443`; macOS uses a LaunchAgent on `:8443` with a `pf` redirect so `:443` traffic still flows through unprivileged. Requires Go 1.22+ on PATH. Full walkthrough and manual steps in [docs/GUIDE.md](docs/GUIDE.md).
 
 **Or — no daemon needed, just scan a file offline:**
 

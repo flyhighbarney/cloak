@@ -25,7 +25,7 @@ cloakline is a local-first AI security gateway that sits between your developmen
 
 | Requirement | Detail |
 |---|---|
-| **OS** | Windows 10 22H2 or Windows 11 (tested). Linux and macOS work for standalone `cloak scan`; the TLS inspector and Windows notifications require Windows. |
+| **OS** | Windows 10 22H2 / Windows 11, or macOS 12+ (Monterey and later). Linux compiles and runs `cloak scan` offline, but has no bootstrap script yet — use the manual steps in §2b. |
 | **Go** | 1.22 or later (to build from source) |
 | **PowerShell** | 5.1+ (Windows, for balloon notifications) |
 | **Admin rights** | Required only to edit `C:\Windows\System32\drivers\etc\hosts`. The daemon itself runs as your normal user account. |
@@ -36,6 +36,8 @@ cloakline is a local-first AI security gateway that sits between your developmen
 ## 2. Installation
 
 ### 2a. One-command install (recommended)
+
+#### Windows
 
 From a fresh clone, run:
 
@@ -54,13 +56,40 @@ That's it. The script:
 7. **Adds hosts-file entries** for `api.anthropic.com` and `api.openai.com`
 8. **Verifies DNS** actually resolves those to `127.0.0.1` before declaring success
 
+Flags: `-SkipBuild`, `-SkipTrust`.
+
+#### macOS
+
+From a fresh clone:
+
+```bash
+./scripts/bootstrap.sh
+```
+
+The script:
+
+1. **Verifies Go 1.22+ is on PATH** — fast-fails before any sudo prompts
+2. **Builds** both binaries with `go build`
+3. **Trusts the local inspection CA** — Keychain may prompt for your login password
+4. **Chains to `install.sh`**, which:
+   - Sets `inspect.listen` to `:8443` in `pipeline.yaml`
+   - Installs a **pf redirect** (`:443 → :8443` on `lo0`) so the daemon can stay unprivileged — needs one `sudo` for `pfctl`
+   - Writes `~/Library/LaunchAgents/com.cloakline.daemon.plist` and loads it
+   - Verifies cloakline is listening on `:8443` and admin `:4001` responds
+   - Adds hosts entries for `api.anthropic.com` and `api.openai.com` (needs `sudo`)
+   - Flushes DNS (`dscacheutil` + `mDNSResponder`) and verifies `api.anthropic.com` resolves to `127.0.0.1`
+
+Flags: `--skip-build`, `--skip-trust`.
+
+**macOS notes:**
+- Keys are stored in your **login Keychain** under the service name `cloakline` (visible in Keychain Access.app)
+- HIGH-tier notifications don't appear as balloons yet on macOS — the redaction still happens, but you check the `/admin` dashboard to see what was caught
+- The pf redirect keeps the daemon unprivileged (`:8443`) while still intercepting standard `:443` traffic
+- Daemon logs land in `/tmp/cloakline.log` and `/tmp/cloakline.err`
+
 If any step fails, the hosts file is rolled back automatically so nothing is left in a half-installed state.
 
-Flags:
-- `-SkipBuild` — use the existing `bin\*.exe` files instead of running `go build`
-- `-SkipTrust` — skip the CA install (assume it's already trusted)
-
-Requirements: Go 1.22+ on PATH (unless you use `-SkipBuild`).
+Requirements: Go 1.22+ on PATH (unless you use `--skip-build` / `-SkipBuild`).
 
 ### 2b. Manual install (if you prefer step-by-step)
 
@@ -425,6 +454,16 @@ The local inspection CA is installed **per-user** (`certutil -user -addstore Roo
 ---
 
 ## 7. Uninstall
+
+### macOS
+
+```bash
+./scripts/uninstall.sh
+```
+
+That single command unloads the LaunchAgent, removes the pf anchor, deletes hosts entries, flushes DNS, reverts `pipeline.yaml`, and removes the CA from Keychain. Binaries and app-data are left in place — delete `bin/` and `~/Library/Application\ Support/cloakline/` manually for a full wipe.
+
+### Windows (manual)
 
 ```bash
 # 1. Remove the local CA from the OS trust store.
