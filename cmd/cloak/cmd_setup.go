@@ -47,8 +47,10 @@ func cmdSetup(args []string) error {
 	fmt.Println()
 
 	// Step 1 — CA trust.
+	// Pass --yes to skip the standalone confirmation prompt: the wizard
+	// banner already explains what the CA is and why it's needed.
 	fmt.Println(bold("Step 1 / 4 — install local inspection CA"))
-	if err := trustInstall(nil); err != nil {
+	if err := trustInstall([]string{"--yes"}); err != nil {
 		return fmt.Errorf("could not install CA: %w", err)
 	}
 	fmt.Println()
