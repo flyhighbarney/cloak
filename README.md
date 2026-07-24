@@ -13,9 +13,23 @@ A local-first AI security gateway. Drop-in OpenAI / Anthropic compatible. Redact
 ```bash
 git clone https://github.com/flyhighbarney/cloakline.git
 cd cloakline
-# Windows:
+```
+
+Then, on **Windows CMD**:
+
+```bat
+install
+```
+
+On **PowerShell**:
+
+```powershell
 .\scripts\bootstrap.ps1
-# macOS:
+```
+
+On **macOS**:
+
+```bash
 ./scripts/bootstrap.sh
 ```
 
