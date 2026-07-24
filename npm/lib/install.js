@@ -29,7 +29,11 @@ const fs              = require('fs');
 const { spawnSync }   = require('child_process');
 const https           = require('https');
 
-const REPO       = 'flyhighbarney/cloakline';
+// The GitHub repo name may differ from the npm package name — the
+// repo is currently at flyhighbarney/policyd (its historical name)
+// while the product/npm name is cloakline. Override with the
+// CLOAKLINE_REPO env var if you fork.
+const REPO       = process.env.CLOAKLINE_REPO || 'flyhighbarney/policyd';
 const RELEASE_TAG = process.env.CLOAKLINE_TAG || 'latest';
 
 // --- paths ---------------------------------------------------------------
@@ -85,12 +89,16 @@ function archSlug() {
 
 function httpsGet(url, opts = {}) {
     return new Promise((resolve, reject) => {
-        const req = https.get(url, {
-            headers: {
-                'User-Agent': 'cloakline-npm-installer',
-                Accept: opts.accept || 'application/octet-stream',
-            },
-        }, res => {
+        const headers = {
+            'User-Agent': 'cloakline-npm-installer',
+            Accept: opts.accept || 'application/octet-stream',
+        };
+        // Attach GitHub token if the repo is private. Users of a private
+        // fork export CLOAKLINE_TOKEN=ghp_... before running npx.
+        // GITHUB_TOKEN is also honoured (matches gh CLI convention).
+        const tok = process.env.CLOAKLINE_TOKEN || process.env.GITHUB_TOKEN;
+        if (tok) headers.Authorization = `Bearer ${tok}`;
+        const req = https.get(url, { headers }, res => {
             // Follow up to 5 redirects (GitHub Releases uses S3 redirects).
             if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
                 const redirects = (opts.redirects || 0) + 1;

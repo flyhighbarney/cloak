@@ -8,7 +8,7 @@ Local-first AI security gateway. Redacts PII, secrets, and API keys before they 
 npx cloakline install
 ```
 
-That downloads platform-native binaries + scripts from the [latest GitHub Release](https://github.com/flyhighbarney/cloakline/releases) and runs the platform's bootstrap installer.
+That downloads platform-native binaries + scripts from the [latest GitHub Release](https://github.com/flyhighbarney/policyd/releases) and runs the platform's bootstrap installer.
 
 **Supported platforms:**
 - Windows 10 22H2 / Windows 11 (`x64`, `arm64`)
@@ -38,7 +38,7 @@ The npm package itself (`node_modules/cloakline`) contains only this JS shim —
 
 ## Docs and source
 
-See the full [project README](https://github.com/flyhighbarney/cloakline) and [docs/GUIDE.md](https://github.com/flyhighbarney/cloakline/blob/main/docs/GUIDE.md) for architecture, security model, and troubleshooting.
+See the full [project README](https://github.com/flyhighbarney/policyd) and [docs/GUIDE.md](https://github.com/flyhighbarney/policyd/blob/main/docs/GUIDE.md) for architecture, security model, and troubleshooting.
 
 ## License
 

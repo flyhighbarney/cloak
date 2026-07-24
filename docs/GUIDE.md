@@ -45,7 +45,7 @@ npx cloakline install
 
 That does the following:
 
-1. Downloads the platform-native binaries + scripts from the [latest GitHub Release](https://github.com/flyhighbarney/cloakline/releases) into a stable location:
+1. Downloads the platform-native binaries + scripts from the [latest GitHub Release](https://github.com/flyhighbarney/policyd/releases) into a stable location:
    - Windows: `%LOCALAPPDATA%\cloakline\`
    - macOS: `~/.cloakline/`
 2. Runs the platform's `bootstrap` script with `--skip-build` (binaries are already downloaded), which handles CA trust, hosts file, scheduled task / LaunchAgent, pf redirect on macOS, and verification.
@@ -64,7 +64,8 @@ The first invocation downloads only the `cloak` CLI (~10 MB). Subsequent runs us
 
 **Environment overrides:**
 - `CLOAKLINE_TAG=v0.1.2 npx cloakline install` — pin to a specific release
-- Set `CLOAKLINE_TAG=latest` (default) to always pull newest
+- `CLOAKLINE_REPO=owner/name` — install from a fork
+- `CLOAKLINE_TOKEN=ghp_…` — GitHub personal-access token (needed only if the source repo is private; also honours `GITHUB_TOKEN`)
 
 ### 2b. Build-from-source (developers) — one-command install
 
