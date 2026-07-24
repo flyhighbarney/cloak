@@ -1,0 +1,170 @@
+{{define "logs.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cloakline · Logs</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0f1115; color: #e6e6ea; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    header { background: #171923; border-bottom: 1px solid #262a36; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+    header .meta { color: #7f8798; font-size: 12px; }
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+    nav.tabs { margin-bottom: 20px; }
+    nav.tabs a {
+      display: inline-block;
+      color: #a0a4b4;
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    nav.tabs a.active { background: #262a36; color: #e6e6ea; }
+    nav.tabs a:hover { color: #e6e6ea; }
+
+    .panel {
+      background: #171923;
+      border: 1px solid #262a36;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .panel h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #e6e6ea;
+      margin: 0 0 6px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .panel p { color: #a0a4b4; font-size: 13px; margin: 0 0 16px 0; }
+
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+    .muted { color: #7f8798; }
+
+    .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+    .toolbar .path { color: #7f8798; font-size: 12px; }
+
+    button {
+      background: #55c8e0;
+      color: #0f1115;
+      border: 0;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    button:hover { background: #6fd6ec; }
+    button:disabled { opacity: 0.6; cursor: default; }
+
+    select {
+      background: #0f1115;
+      color: #e6e6ea;
+      border: 1px solid #262a36;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 12px;
+    }
+
+    #logbox {
+      background: #0f1115;
+      border: 1px solid #262a36;
+      border-radius: 6px;
+      padding: 14px;
+      max-height: 60vh;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #c7cad1;
+    }
+
+    footer { padding: 24px; color: #7f8798; font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>cloakline · admin</h1>
+    <div class="meta">
+      <span class="mono">{{.Version}}</span>
+      &nbsp;·&nbsp;
+      <span>{{.Now}}</span>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs">
+      <a href="/admin">Activity</a>
+      <a href="/admin/keys">API keys</a>
+      <a href="/admin/prefs">Preferences</a>
+      <a href="/admin/logs" class="active">Logs</a>
+    </nav>
+
+    <div class="panel">
+      <h2>Recent log output</h2>
+      <p>The last lines from cloakline's own log file. If something goes wrong, copy this and paste it wherever you're getting help.</p>
+
+      <div class="toolbar">
+        <div class="path mono">{{if .LogPath}}{{.LogPath}}{{else}}(log file unavailable){{end}}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="lines">
+            <option value="200">last 200 lines</option>
+            <option value="500">last 500 lines</option>
+            <option value="2000">last 2000 lines</option>
+          </select>
+          <button id="refresh" type="button">Refresh</button>
+          <button id="copy" type="button">Copy to clipboard</button>
+        </div>
+      </div>
+
+      <pre id="logbox">{{.LogText}}</pre>
+    </div>
+  </main>
+
+  <footer>
+    Log lines are redacted before they're written — see docs/threat-model.md T3.
+  </footer>
+
+  <script>
+    var box = document.getElementById('logbox');
+    var lines = document.getElementById('lines');
+    var copyBtn = document.getElementById('copy');
+    var refreshBtn = document.getElementById('refresh');
+
+    function load() {
+      var n = lines.value;
+      fetch('/admin/api/logs?n=' + encodeURIComponent(n), { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (text) {
+          box.textContent = text || '(log is empty)';
+          box.scrollTop = box.scrollHeight;
+        })
+        .catch(function () {
+          box.textContent = '(failed to load log)';
+        });
+    }
+
+    refreshBtn.addEventListener('click', load);
+    lines.addEventListener('change', load);
+
+    copyBtn.addEventListener('click', function () {
+      navigator.clipboard.writeText(box.textContent).then(function () {
+        var old = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        copyBtn.disabled = true;
+        setTimeout(function () { copyBtn.textContent = old; copyBtn.disabled = false; }, 1200);
+      });
+    });
+
+    box.scrollTop = box.scrollHeight;
+  </script>
+</body>
+</html>
+{{end}}

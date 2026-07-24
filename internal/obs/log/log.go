@@ -67,6 +67,12 @@ func NewWithWriter(w io.Writer, min Level) *Logger {
 	return &Logger{out: w, minLevel: min}
 }
 
+// NewMulti returns a logger at the given minimum level, writing every
+// record to all of writers (e.g. stdout and a rotating log file).
+func NewMulti(min Level, writers ...io.Writer) *Logger {
+	return &Logger{out: io.MultiWriter(writers...), minLevel: min}
+}
+
 // With returns a child logger with additional base fields.
 func (l *Logger) With(f Fields) *Logger {
 	merged := make(Fields, len(l.base)+len(f))

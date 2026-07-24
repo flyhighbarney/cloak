@@ -2,9 +2,11 @@ package tlsinspect
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -160,8 +162,29 @@ func NewHandler(c HandlerConfig) *Handler {
 		confirm:      confirm,
 		forwardClient: &http.Client{
 			Timeout: 120 * time.Second,
+			// Bypass the hosts-file redirect that transparent interception
+			// installs. Without this, api.anthropic.com resolves to
+			// 127.0.0.1 for OUR process too and we loop into our own
+			// listener (see resolver.go). The bootstrap resolver dials the
+			// real upstream IP instead.
+			Transport: newForwardTransport(newBootstrapResolver()),
 		},
 	}
+}
+
+// MaxBodyBytes returns the configured request-body cap. Used by the
+// failsafe path in server.go, which must buffer the body itself so it
+// can replay the request upstream if the inspection pipeline panics.
+func (h *Handler) MaxBodyBytes() int64 { return h.maxBodyBytes }
+
+// FailOpen forwards an untouched request straight to the real upstream with
+// zero inspection. It is the automatic failsafe: if the inspection pipeline
+// panics mid-request, the server recovers and calls this so the user's AI
+// request still succeeds instead of dying on a half-written response. This
+// preserves cloakline's core promise — the guard failing must never break
+// Claude Code.
+func (h *Handler) FailOpen(w http.ResponseWriter, r *http.Request, host string, body []byte) {
+	h.forwardPassthrough(w, r, host, body)
 }
 
 // SetNotifyFunc sets the callback fired after a HIGH-tier redact_one_way
@@ -315,7 +338,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 
 	resp, err := h.forwardClient.Do(req)
 	if err != nil {
-		h.logger.Warn("tlsinspect.forward_failed", log.Fields{"host": host, "err": err.Error()})
+		h.logForwardErr("tlsinspect.forward_failed", host, r.URL.Path, err)
 		http.Error(w, `{"error":"upstream unreachable"}`, http.StatusBadGateway)
 		return
 	}
@@ -391,7 +414,7 @@ func (h *Handler) forwardPassthrough(w http.ResponseWriter, r *http.Request, hos
 	}
 	resp, err := h.forwardClient.Do(req)
 	if err != nil {
-		h.logger.Warn("tlsinspect.passthrough_failed", log.Fields{"host": host, "path": r.URL.Path, "err": err.Error()})
+		h.logForwardErr("tlsinspect.passthrough_failed", host, r.URL.Path, err)
 		http.Error(w, `{"error":"upstream unreachable"}`, http.StatusBadGateway)
 		return
 	}
@@ -410,6 +433,25 @@ func (h *Handler) forwardPassthrough(w http.ResponseWriter, r *http.Request, hos
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respBody)))
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(respBody)
+}
+
+// logForwardErr records a failed upstream forward at a severity that matches
+// the cause. A client-cancelled request (context.Canceled) or a deadline that
+// fired because the caller went away is normal churn — Claude Desktop cancels
+// every in-flight request at once when it restarts or switches models, which
+// otherwise floods the log with thousands of near-identical warnings for a
+// non-event. Those go to Debug. Everything else (real upstream unreachability,
+// TLS failures, resolver errors) stays at Warn.
+func (h *Handler) logForwardErr(msg, host, path string, err error) {
+	if h.logger == nil {
+		return
+	}
+	fields := log.Fields{"host": host, "path": path, "err": err.Error()}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		h.logger.Debug(msg, fields)
+		return
+	}
+	h.logger.Warn(msg, fields)
 }
 
 // forwardBody forwards an already-approved body upstream 1:1 and

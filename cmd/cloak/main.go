@@ -38,6 +38,8 @@ func main() {
 		err = cmdTail(args)
 	case "dashboard", "dash":
 		err = cmdDashboard(args)
+	case "logs":
+		err = cmdLogs(args)
 	case "trust":
 		err = cmdTrust(args)
 	case "launch":
@@ -105,6 +107,12 @@ COMMANDS
     dashboard   Open the admin web dashboard in your default browser.
 
                     cloak dashboard
+
+    logs        Open the Logs tab in the admin dashboard — shows recent
+                cloakline log output with a one-click copy button, for
+                pasting into a bug report or a chat with Claude.
+
+                    cloak logs
 
     trust       Manage the local inspection CA (used by the TLS inspection
                 module for transparent scanning of AI CLI traffic).

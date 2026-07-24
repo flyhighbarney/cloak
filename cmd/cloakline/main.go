@@ -16,18 +16,22 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"path/filepath"
+	"runtime"
+
 	"cloakline/internal/adminui"
 	"cloakline/internal/api"
 	"cloakline/internal/audit"
+	"cloakline/internal/backup"
 	"cloakline/internal/config"
 	"cloakline/internal/engine"
 	"cloakline/internal/httpclient"
 	"cloakline/internal/keyvault"
 	"cloakline/internal/notify"
 	"cloakline/internal/obs/log"
-	"cloakline/internal/prefs"
 	"cloakline/internal/obs/meter"
 	policycel "cloakline/internal/policy/cel"
+	"cloakline/internal/prefs"
 	routercel "cloakline/internal/router/cel"
 	"cloakline/internal/stage/budget"
 	"cloakline/internal/stage/dlptier1"
@@ -60,7 +64,8 @@ func run() error {
 
 	// Log level from env; defaults to info.
 	lvl := parseLogLevel(os.Getenv("LOG_LEVEL"))
-	logger := log.New(lvl)
+	logger, closeLog := newLogger(lvl)
+	defer closeLog()
 
 	// Install the OS-native keyring backend for dashboard-managed API
 	// keys. On platforms without native support this is a no-op and
@@ -77,10 +82,10 @@ func run() error {
 		return fmt.Errorf("config: %w", err)
 	}
 	logger.Info("config.loaded", log.Fields{
-		"hash":      ir.Hash,
-		"env":       string(ir.Env),
-		"security":  string(ir.SecurityMode),
-		"providers": len(ir.Providers),
+		"hash":       ir.Hash,
+		"env":        string(ir.Env),
+		"security":   string(ir.SecurityMode),
+		"providers":  len(ir.Providers),
 		"principals": len(ir.Principals),
 	})
 
@@ -316,6 +321,24 @@ func run() error {
 	return nil
 }
 
+// newLogger builds the process logger, writing to stdout and (best-effort)
+// to a rotating file under the user's config dir so errors survive after
+// the daemon is running headless/as a background process — the file is
+// what a user hands to support (or pastes to Claude) when something breaks.
+// Failure to open the file is non-fatal: the daemon still logs to stdout.
+func newLogger(lvl log.Level) (*log.Logger, func()) {
+	path, err := log.DefaultLogFile()
+	if err != nil {
+		return log.New(lvl), func() {}
+	}
+	f, err := log.OpenFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not open log file %s: %v\n", path, err)
+		return log.New(lvl), func() {}
+	}
+	return log.NewMulti(lvl, os.Stdout, f), func() { f.Close() }
+}
+
 func parseLogLevel(s string) log.Level {
 	switch strings.ToLower(s) {
 	case "debug":
@@ -381,6 +404,12 @@ func startInspect(
 		}
 		caDir = home + string(os.PathSeparator) + "cloakline" + string(os.PathSeparator) + "ca"
 	}
+
+	// Automatic state backup — runs unattended every boot, keeps the newest
+	// few, and never blocks startup. The user never has to think about it;
+	// if a vault/config/CA ever gets corrupted, a clean copy is on disk.
+	autoBackup(logger)
+
 	ca, err := tlsinspect.LoadOrCreate(caDir)
 	if err != nil {
 		return err
@@ -423,6 +452,48 @@ func startInspect(
 		}
 	}()
 	return nil
+}
+
+// autoBackup snapshots cloakline's mutable state on startup and keeps the
+// newest few copies. It is fully automatic and best-effort: any failure is
+// logged and swallowed so a backup problem can never stop the daemon from
+// booting. Sources cover everything expensive-or-annoying to lose — the
+// encrypted state dir (vault + prefs + CA), the pipeline config, and a copy
+// of the OS hosts file (so a botched panic-restore can be reconstructed).
+func autoBackup(logger *log.Logger) {
+	cfgHome, err := os.UserConfigDir()
+	if err != nil {
+		logger.Warn("backup.skipped", log.Fields{"reason": "no user config dir", "err": err.Error()})
+		return
+	}
+	stateDir := filepath.Join(cfgHome, "cloakline")
+	destDir := filepath.Join(stateDir, "backups")
+
+	sources := []backup.Source{
+		{Path: stateDir, Label: "state"},
+		{Path: "configs/pipeline.yaml", Label: "config"},
+		{Path: "configs/providers.yaml", Label: "config"},
+		{Path: hostsFilePath(), Label: "hosts"},
+	}
+
+	path, err := backup.Auto(destDir, sources, 10)
+	if err != nil {
+		logger.Warn("backup.failed", log.Fields{"err": err.Error()})
+		return
+	}
+	logger.Info("backup.written", log.Fields{"path": path, "keep": 10})
+}
+
+// hostsFilePath returns the OS hosts file location for the running platform.
+func hostsFilePath() string {
+	if runtime.GOOS == "windows" {
+		root := os.Getenv("SystemRoot")
+		if root == "" {
+			root = `C:\Windows`
+		}
+		return filepath.Join(root, "System32", "drivers", "etc", "hosts")
+	}
+	return "/etc/hosts"
 }
 
 // adminListenBase turns ir.AdminListen (":4001" or "127.0.0.1:4001")

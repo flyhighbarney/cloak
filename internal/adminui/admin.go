@@ -15,6 +15,7 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 
 	"cloakline/internal/audit"
 	"cloakline/internal/keyvault"
+	"cloakline/internal/obs/log"
 	"cloakline/internal/prefs"
 )
 
@@ -142,6 +144,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.renderPrefs(w, r, token, "")
 	case r.Method == http.MethodPost && sub == "prefs":
 		h.postPrefs(w, r, token)
+	case r.Method == http.MethodGet && sub == "logs":
+		h.renderLogs(w, r)
+	case r.Method == http.MethodGet && sub == "api/logs":
+		h.getAPILogs(w, r)
 	case r.Method == http.MethodGet && sub == "session/allow":
 		h.getSessionAllow(w, r)
 	case r.Method == http.MethodGet && sub == "api/status":
@@ -402,6 +408,80 @@ func (h *Handler) postPrefs(w http.ResponseWriter, r *http.Request, token string
 		return
 	}
 	http.Redirect(w, r, "/admin/prefs", http.StatusSeeOther)
+}
+
+// renderLogs serves GET /admin/logs — the log tab shown in the browser.
+// The heavy lifting (reading the file) happens client-side via
+// /admin/api/logs so the "Refresh" button doesn't require a full page
+// reload.
+func (h *Handler) renderLogs(w http.ResponseWriter, r *http.Request) {
+	path, _ := log.DefaultLogFile()
+	text, _ := tailLogFile(path, 200)
+	data := struct {
+		Now     string
+		Version string
+		LogPath string
+		LogText string
+	}{
+		Now:     time.Now().UTC().Format(time.RFC3339),
+		Version: h.version,
+		LogPath: path,
+		LogText: text,
+	}
+	h.writeSecurityHeaders(w, false)
+	if err := h.tmpl.ExecuteTemplate(w, "logs.html", data); err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+	}
+}
+
+// getAPILogs serves GET /admin/api/logs?n=N as plain text — the last N
+// lines of cloakline's own log file, already redacted before it was
+// written (see internal/obs/log). This is what a user copies and pastes
+// when asking for help debugging.
+func (h *Handler) getAPILogs(w http.ResponseWriter, r *http.Request) {
+	n := 200
+	if s := r.URL.Query().Get("n"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 && v <= 5000 {
+			n = v
+		}
+	}
+	path, err := log.DefaultLogFile()
+	if err != nil {
+		http.Error(w, "log path unavailable", http.StatusInternalServerError)
+		return
+	}
+	text, err := tailLogFile(path, n)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if err != nil {
+		if os.IsNotExist(err) {
+			_, _ = w.Write([]byte("(no log file yet — nothing has been written)"))
+			return
+		}
+		_, _ = w.Write([]byte("(failed to read log file: " + err.Error() + ")"))
+		return
+	}
+	_, _ = w.Write([]byte(text))
+}
+
+// tailLogFile returns the last n lines of the file at path. The rotating
+// writer in internal/obs/log caps each file at 10MB, so reading it whole
+// and slicing in memory is cheap enough to not need a streaming reader.
+func tailLogFile(path string, n int) (string, error) {
+	buf, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	text := strings.TrimRight(string(buf), "\n")
+	if text == "" {
+		return "", nil
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 // getSessionAllow handles GET /admin/session/allow?nonce=<hex>.

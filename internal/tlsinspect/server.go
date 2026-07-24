@@ -1,12 +1,15 @@
 package tlsinspect
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"cloakline/internal/obs/log"
@@ -91,6 +94,13 @@ func (s *Server) Serve(ctx context.Context) error {
 }
 
 // ServeHTTP dispatches every terminated connection.
+//
+// Automatic failsafe: the whole per-request pipeline runs under a recover().
+// If any stage panics (a malformed body, a nil deref in a new rule, whatever),
+// the process must NOT die — a dead listener means the hosts-file redirect
+// points at a dead port and every AI client on the machine breaks. Instead we
+// FAIL OPEN: replay the untouched request to the real upstream so the user's
+// request still succeeds. The user never has to know or intervene.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	host := hostOnly(r.Host)
 	if !s.allowed(host) {
@@ -98,8 +108,79 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"host not configured for inspection"}`, http.StatusMisdirectedRequest)
 		return
 	}
-	// Delegate the substantive work to the Handler (see forward.go).
-	s.handler.Handle(w, r, host)
+
+	serveWithFailsafe(
+		w, r, host,
+		s.handler.MaxBodyBytes(),
+		s.logger,
+		s.handler.Handle,
+		s.handler.FailOpen,
+	)
+}
+
+// serveWithFailsafe runs the inspection pipeline under an automatic failsafe.
+// It buffers the request body, invokes handle, and — if handle panics before
+// writing a response — recovers and replays the untouched request via failOpen
+// so the caller still succeeds. Extracted from ServeHTTP so the failsafe can
+// be unit-tested with fakes and without hitting the network.
+//
+// Contract:
+//   - A panic in handle NEVER escapes (the daemon survives).
+//   - If nothing was written yet, failOpen runs (fail open to upstream).
+//   - If handle already started writing, we only log — a partial response
+//     can't be retried, but the process stays up.
+func serveWithFailsafe(
+	w http.ResponseWriter,
+	r *http.Request,
+	host string,
+	bodyCap int64,
+	logger *log.Logger,
+	handle func(http.ResponseWriter, *http.Request, string),
+	failOpen func(http.ResponseWriter, *http.Request, string, []byte),
+) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, bodyCap+1))
+	if err != nil {
+		http.Error(w, `{"error":"read body failed"}`, http.StatusBadRequest)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	tw := &trackedWriter{ResponseWriter: w}
+
+	defer func() {
+		if rec := recover(); rec != nil {
+			if logger != nil {
+				logger.Error("tlsinspect.panic_recovered", log.Fields{
+					"host":  host,
+					"panic": fmt.Sprintf("%v", rec),
+					"stack": string(debug.Stack()),
+				})
+			}
+			if tw.wrote {
+				return // partial response already sent; daemon still alive
+			}
+			failOpen(tw, r, host, body)
+		}
+	}()
+
+	handle(tw, r, host)
+}
+
+// trackedWriter notes whether a response has started, so the failsafe knows
+// whether it's still safe to replay the request.
+type trackedWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (t *trackedWriter) WriteHeader(code int) {
+	t.wrote = true
+	t.ResponseWriter.WriteHeader(code)
+}
+
+func (t *trackedWriter) Write(p []byte) (int, error) {
+	t.wrote = true
+	return t.ResponseWriter.Write(p)
 }
 
 func (s *Server) allowed(host string) bool {
