@@ -176,10 +176,19 @@ catch { Invoke-Fatal "could not register scheduled task: $_" }
 Write-Host ""
 Write-Host "[4/7] Starting cloakline now..."
 try {
-    Start-ScheduledTask -TaskName "cloakline"
-    Write-Host "  start requested" -ForegroundColor Green
+    # Start cloakline directly as a detached process rather than via
+    # Start-ScheduledTask. The scheduled task works for logon restarts,
+    # but when Start-ScheduledTask is called from inside an elevated UAC
+    # session (bootstrap -Verb RunAs), Windows kills the launched process
+    # when that elevated session exits ~15s later. Starting the exe
+    # directly in the current process tree keeps it alive independently.
+    Start-Process -FilePath $ExePath `
+        -ArgumentList "--config `"$ConfigDir`"" `
+        -WorkingDirectory (Split-Path $ExePath -Parent) `
+        -WindowStyle Hidden
+    Write-Host "  started (detached)" -ForegroundColor Green
 } catch {
-    Invoke-Fatal "could not start task: $_"
+    Invoke-Fatal "could not start cloakline: $_"
 }
 
 Write-Host ""
