@@ -7,6 +7,7 @@
 package adminui
 
 import (
+	"context"
 	"crypto/rand"
 	"embed"
 	_ "embed"
@@ -33,6 +34,12 @@ type SessionOptOut interface {
 	OptOutSession(sessionKey string)
 }
 
+// ConnectivityProber is satisfied by tlsinspect.Handler. The admin handler
+// calls it from /admin/api/connectivity to verify the upstream is reachable.
+type ConnectivityProber interface {
+	ProbeConnectivity(ctx context.Context) (latencyMS int64, err error)
+}
+
 //go:embed templates/*.html
 var templatesFS embed.FS
 
@@ -53,11 +60,12 @@ const nonceTTL = 5 * time.Minute
 // /admin/prefs, /admin/session/allow. It's a plain http.Handler; the
 // transport plugs it into the admin listener (defaults to 127.0.0.1:4001).
 type Handler struct {
-	recorder     *audit.Recorder
-	tmpl         *template.Template
-	version      string
-	prefs        *prefs.Store
-	sessionOptOut SessionOptOut // optional; nil = allow-session noop
+	recorder          *audit.Recorder
+	tmpl              *template.Template
+	version           string
+	prefs             *prefs.Store
+	sessionOptOut     SessionOptOut     // optional; nil = allow-session noop
+	connectivityProbe ConnectivityProber // optional; nil disables /connectivity
 
 	nonceMu sync.Mutex
 	nonces  map[string]nonceEntry // hex nonce → entry
@@ -99,6 +107,12 @@ func New(recorder *audit.Recorder, version string, prefsStore *prefs.Store, opts
 // Not safe to call concurrently with ServeHTTP.
 func (h *Handler) WireSessionOptOut(s SessionOptOut) {
 	h.sessionOptOut = s
+}
+
+// WireConnectivityProber sets the connectivity probe after construction.
+// Not safe to call concurrently with ServeHTTP.
+func (h *Handler) WireConnectivityProber(p ConnectivityProber) {
+	h.connectivityProbe = p
 }
 
 // IssueNonce generates a single-use 5-minute token tied to sessionKey.
@@ -154,6 +168,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.getAPIStatus(w, r)
 	case r.Method == http.MethodGet && sub == "api/recent":
 		h.getAPIRecent(w, r)
+	case r.Method == http.MethodGet && sub == "api/connectivity":
+		h.getAPIConnectivity(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -660,6 +676,33 @@ func (h *Handler) getAPIRecent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// getAPIConnectivity serves GET /admin/api/connectivity as JSON.
+// It probes the real Anthropic API through the passthrough transport and
+// reports whether traffic can flow. A 4xx from Anthropic counts as reachable.
+func (h *Handler) getAPIConnectivity(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+
+	if h.connectivityProbe == nil {
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "probe not available"})
+		return
+	}
+
+	latencyMS, err := h.connectivityProbe.ProbeConnectivity(r.Context())
+	if err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":         false,
+			"latency_ms": latencyMS,
+			"error":      err.Error(),
+		})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":         true,
+		"latency_ms": latencyMS,
+	})
 }
 
 // humanizeDuration renders a rough time-saved figure. Precision is not

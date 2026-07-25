@@ -216,6 +216,23 @@ for ($i = 0; $i -lt 20; $i++) {
 if (-not $adminOK)    { Invoke-Fatal "cloakline admin :4001 did not respond within 20s - check Task Scheduler > 'cloakline' > History" }
 if (-not $listeningOK) { Invoke-Fatal "cloakline is not listening on :443 - port may be in use by another service, or bind failed. Run: netstat -ano | findstr :443" }
 
+# Probe upstream connectivity before touching the hosts file. If Anthropic is
+# unreachable now, adding the hosts redirect would break Claude Code immediately.
+Write-Host "  checking upstream connectivity to api.anthropic.com..."
+try {
+    $connResp = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:4001/admin/api/connectivity" -TimeoutSec 12
+    $connData = $connResp.Content | ConvertFrom-Json
+    if ($connData.ok) {
+        Write-Host "  upstream reachable ($($connData.latency_ms) ms)" -ForegroundColor Green
+    } else {
+        $errMsg = if ($connData.error) { $connData.error } else { "unknown" }
+        Invoke-Fatal "cloakline cannot reach api.anthropic.com: $errMsg`n  Check your firewall or internet connection before proceeding."
+    }
+} catch {
+    # Non-fatal: the probe endpoint may not exist on older builds.
+    Write-Host "  connectivity probe skipped (endpoint unavailable)" -ForegroundColor DarkGray
+}
+
 Write-Host ""
 Write-Host "[6/7] Adding hosts entries (safe now - cloakline is confirmed listening)..."
 try {

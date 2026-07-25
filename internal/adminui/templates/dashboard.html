@@ -131,6 +131,26 @@
     }
     footer { padding: 24px; color: #7f8798; font-size: 12px; text-align: center; }
     footer .mono { color: #7f8798; }
+    #connectivity-banner {
+      display: none;
+      background: #3d1a1a;
+      color: #ff8a8a;
+      border: 1px solid #ff4444;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    #connectivity-ok {
+      display: none;
+      background: #1e3a24;
+      color: #7ed957;
+      border: 1px solid #4a8a5a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -144,6 +164,17 @@
   </header>
 
   <main>
+    <div id="connectivity-banner">
+      &#x26A0;&#xFE0F; <strong>Upstream unreachable</strong> — cloakline cannot reach api.anthropic.com.
+      Claude Code requests will fail until connectivity is restored.
+      Check your network or firewall, then <a href="#" onclick="checkConnectivity();return false;" style="color:#ff8a8a">recheck</a>.
+      <span id="connectivity-error" style="font-family:monospace;font-size:11px;margin-left:8px"></span>
+    </div>
+    <div id="connectivity-ok">
+      &#x2705; Upstream reachable — api.anthropic.com is accessible.
+      <span id="connectivity-latency" style="font-size:11px;margin-left:4px"></span>
+    </div>
+
     <nav class="tabs">
       <a href="/admin" class="active">Activity</a>
       <a href="/admin/keys">API keys</a>
@@ -246,6 +277,34 @@
   <footer>
     Showing last {{.Limit}} requests · <span class="mono">/admin?n=500</span> for more · no plaintext content is ever stored.
   </footer>
+  <script>
+    function checkConnectivity() {
+      fetch('/admin/api/connectivity', {cache: 'no-store'})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var banner = document.getElementById('connectivity-banner');
+          var ok = document.getElementById('connectivity-ok');
+          var errSpan = document.getElementById('connectivity-error');
+          var latSpan = document.getElementById('connectivity-latency');
+          if (data.ok) {
+            banner.style.display = 'none';
+            ok.style.display = 'block';
+            latSpan.textContent = '(' + data.latency_ms + ' ms)';
+            setTimeout(function() { ok.style.display = 'none'; }, 8000);
+          } else {
+            ok.style.display = 'none';
+            banner.style.display = 'block';
+            errSpan.textContent = data.error || '';
+          }
+        })
+        .catch(function() {
+          document.getElementById('connectivity-banner').style.display = 'block';
+          document.getElementById('connectivity-error').textContent = '(could not reach admin server)';
+        });
+    }
+    // Run once on page load so the user sees status immediately.
+    checkConnectivity();
+  </script>
 </body>
 </html>
 {{end}}

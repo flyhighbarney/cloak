@@ -470,9 +470,9 @@ func startInspect(
 	}
 	handler := tlsinspect.NewHandler(handlerCfg)
 
-	// Wire session opt-out: adminHandler needs handler.OptOutSession so
-	// it can grant permission when a nonce is redeemed.
+	// Wire session opt-out and connectivity probe into the admin handler.
 	adminHandler.WireSessionOptOut(handler)
+	adminHandler.WireConnectivityProber(handler)
 
 	// Wire the notify callback: issue a nonce, build the allow URL, fire
 	// the platform notification. adminBase derives from AdminListen.

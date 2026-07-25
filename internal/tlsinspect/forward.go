@@ -25,18 +25,14 @@ import (
 //
 // Flow:
 //   1. Read the request body into memory (up to MaxBodyBytes).
-//   2. Extract prompt text from the JSON body (Anthropic + OpenAI shapes).
-//   3. Run the injection rule set. High-score → 403 to client, no forward.
-//   4. Run DLP patterns. HIGH-tier findings (api_key, aws_key, password, etc.)
-//      are one-way redacted to static markers ([REDACTED_PASSWORD] etc.) and
-//      the user is notified via a system notification (Windows balloon tip).
-//      MEDIUM-tier findings (email, SSN, phone) are round-trip tokenized so
-//      Claude's response uses the real values again. LOW-tier findings are
-//      forwarded unchanged and flagged on the dashboard.
-//   5. Forward the modified body to the real host with the ORIGINAL
-//      auth headers untouched.
-//   6. On response, walk the body and swap pseudonyms back to originals
-//      so the CLI sees its real values.
+//   2. Non-chat endpoints (OAuth, model listing, etc.) pass through untouched.
+//   3. DLP scan on the latest user message only. HIGH-tier findings (api_key,
+//      aws_key, password, etc.) are one-way redacted to static markers and the
+//      user is notified via a system notification (Windows balloon tip). MEDIUM-
+//      tier findings (email, SSN, phone) are round-trip tokenized. LOW-tier
+//      findings pass through and are flagged on the dashboard.
+//   4. Forward the modified body to the real host with ORIGINAL auth untouched.
+//   5. On response, swap pseudonyms back so the CLI sees its real values.
 //
 // If the user clicks "Allow session" in the notification (opens an admin URL),
 // subsequent requests from the same session bypass HIGH-tier redaction for
@@ -274,10 +270,9 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	//    gets scrubbed defensively even if we didn't scan history for
 	//    detection.
 	latest := extractLastUserPrompt(body)
-	joined := strings.Join(extractPromptText(body), "\n")
 	scanText := latest
 	if scanText == "" {
-		scanText = joined
+		scanText = strings.Join(extractPromptText(body), "\n")
 	}
 	scanned := patterns.Scan(scanText)
 	for _, r := range intent.FindPasswordCandidates(scanText) {
@@ -729,4 +724,31 @@ func (v *localVault) restore(body []byte) []byte {
 		out = bytes.ReplaceAll(out, []byte(pseudo), []byte(orig))
 	}
 	return out
+}
+
+// ProbeConnectivity makes a lightweight HEAD request to the Anthropic API
+// through the passthrough client (same transport used for non-chat endpoints)
+// and reports whether the upstream is reachable. A 4xx from Anthropic still
+// counts as reachable — it means TLS and routing work but auth is absent,
+// which is expected for an unauthenticated probe. Only a network error or
+// timeout means cloakline is blocking traffic.
+func (h *Handler) ProbeConnectivity(ctx context.Context) (latencyMS int64, err error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, "https://api.anthropic.com", nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", "cloakline-probe/1.0")
+
+	start := time.Now()
+	resp, err := h.passthroughClient.Do(req)
+	latencyMS = time.Since(start).Milliseconds()
+	if err != nil {
+		return latencyMS, fmt.Errorf("upstream unreachable: %w", err)
+	}
+	resp.Body.Close()
+	// Any HTTP response (even 401/403) means the proxy chain works.
+	return latencyMS, nil
 }

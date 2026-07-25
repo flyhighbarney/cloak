@@ -97,16 +97,35 @@ func TestHistoricalAttackInContextDoesNotBlockLegitFollowup(t *testing.T) {
 		},
 	}
 	bus := api.NewMapBus()
-	// Run only scores user/tool messages. The stage sees all three, but only
-	// the latest role=user turn should determine the outcome.
-	// The stage currently scores ALL user turns — this test documents the
-	// desired behaviour so a future refactor can enforce it.
-	// For now we assert the score and rely on the tlsinspect layer (forward.go)
-	// to enforce last-message-only scoring before the request leaves the machine.
+	// The stage currently scores ALL user turns. The historical attack message
+	// ("Ignore all previous instructions…") scores ≥ 50 on its own, so Run
+	// returns ErrPolicyBlocked even though the latest message is benign.
+	// The test asserts this gap: combined score is high; last-message score is
+	// low. A future refactor that switches to last-message-only scoring must
+	// flip the wantBlocked assertion and remove the known-gap comment.
+	err := s.Run(context.Background(), req, bus)
+	wantBlocked := true // gap: stage scores all turns, not just the last
+	wasBlocked := errors.Is(err, api.ErrPolicyBlocked)
+	if wasBlocked != wantBlocked {
+		t.Errorf("blocked=%v want=%v (err=%v)", wasBlocked, wantBlocked, err)
+	}
+
 	score, _ := bus.Get(SignalScore)
 	sc, _ := score.(int)
-	_ = sc // score value recorded for documentation; see forward.go fix
-	_ = s.Run(context.Background(), req, bus)
+	if sc < 50 {
+		t.Errorf("combined score %d should be ≥ 50 (historical attack + benign turn both scored)", sc)
+	}
+
+	// Verify that the last message alone scores well below threshold.
+	lastMsg := req.Messages[len(req.Messages)-1]
+	singleBus := api.NewMapBus()
+	singleReq := &api.Request{Mode: api.ModeUnary, Messages: []api.Message{lastMsg}}
+	_ = s.Run(context.Background(), singleReq, singleBus)
+	lastScore, _ := singleBus.Get(SignalScore)
+	ls, _ := lastScore.(int)
+	if ls >= 50 {
+		t.Errorf("last-message-only score %d should be < 50 (benign follow-up)", ls)
+	}
 }
 
 func TestSystemRoleNotScored(t *testing.T) {
