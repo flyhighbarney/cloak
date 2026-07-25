@@ -74,26 +74,34 @@ func LooksIntentional(text string, start, end int) bool {
 // chars, ends at whitespace or end-of-line) are returned.
 func FindPasswordCandidates(text string) [][2]int {
 	var out [][2]int
-	for _, m := range rePasswordLabel.FindAllStringSubmatchIndex(text, -1) {
-		// Submatch 1 is the value.
-		if len(m) < 4 {
-			continue
+	seen := make(map[[2]int]struct{})
+	for _, re := range rePasswordCandidates {
+		for _, m := range re.FindAllStringSubmatchIndex(text, -1) {
+			// Submatch 1 is the value.
+			if len(m) < 4 {
+				continue
+			}
+			vs, ve := m[2], m[3]
+			if vs < 0 || ve <= vs {
+				continue
+			}
+			val := text[vs:ve]
+			if len(val) < 3 {
+				continue
+			}
+			// Skip obvious placeholders.
+			lower := strings.ToLower(val)
+			if lower == "xxx" || lower == "***" || lower == "<redacted>" ||
+				strings.HasPrefix(lower, "[") || strings.HasPrefix(lower, "<") {
+				continue
+			}
+			r := [2]int{vs, ve}
+			if _, dup := seen[r]; dup {
+				continue
+			}
+			seen[r] = struct{}{}
+			out = append(out, r)
 		}
-		vs, ve := m[2], m[3]
-		if vs < 0 || ve <= vs {
-			continue
-		}
-		val := text[vs:ve]
-		if len(val) < 3 {
-			continue
-		}
-		// Skip obvious placeholders.
-		lower := strings.ToLower(val)
-		if lower == "xxx" || lower == "***" || lower == "<redacted>" ||
-			strings.HasPrefix(lower, "[") || strings.HasPrefix(lower, "<") {
-			continue
-		}
-		out = append(out, [2]int{vs, ve})
 	}
 	return out
 }
@@ -109,9 +117,16 @@ var (
 		regexp.MustCompile(`(?s)\b(login|user(name)?)\s*:[^\n]{0,200}\s*\n?\s*(password|pw|psd|pass)\s*:`),
 	}
 
-	// Labelled password block: capture the value on the same line.
-	// Accepts password / pw / psd / pass / passcode / passphrase as
-	// the label, followed by = or :, followed by a value that runs
-	// until whitespace or end-of-line.
-	rePasswordLabel = regexp.MustCompile(`(?i)\b(?:password|passwd|passcode|passphrase|pw|psd|pass)\s*[:=]\s*(\S{3,})`)
+	// rePasswordCandidates each capture a password VALUE in submatch 1.
+	// FindPasswordCandidates runs them all and merges the hits.
+	rePasswordCandidates = []*regexp.Regexp{
+		// Labelled block: "password: X", "pw=X", "psd : X". The label +
+		// delimiter ([:=]) is the signal; the value runs to whitespace/EOL.
+		regexp.MustCompile(`(?i)\b(?:password|passwd|passcode|passphrase|pw|psd|pass)\s*[:=]\s*(\S{3,})`),
+		// Verb form: "password is X", "passphrase was X". No colon, so the
+		// value is the next whitespace-delimited token. Full words only
+		// (not pw/psd) to keep false positives down. Erring toward an extra
+		// redact is safe per this package's design.
+		regexp.MustCompile(`(?i)\b(?:password|passwd|passcode|passphrase)\s+(?:is|was)\s+(\S{3,})`),
+	}
 )

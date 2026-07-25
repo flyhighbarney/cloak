@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cloakline/internal/api"
+	"cloakline/internal/audit"
 	"cloakline/internal/crypto/aesbox"
 	"cloakline/internal/dlp/patterns"
 	"cloakline/internal/obs/log"
@@ -66,6 +67,20 @@ type Handler struct {
 	// flog collapses repeated forward-path errors so a retry storm can't
 	// bury real warnings under thousands of identical lines. See logdedup.go.
 	flog *forwardLogLimiter
+
+	// recorder receives one content-free audit entry per inspected CHAT
+	// request, so the admin dashboard / `cloakline tail` reflect the
+	// transparent :443 path (not just the :4000 gateway). nil disables
+	// recording — safe for tests. See recorderFacade.
+	recorder recorderFacade
+}
+
+// recorderFacade is the subset of *audit.Recorder the handler needs. Kept as
+// an interface so tests can omit it (nil) and so the handler never depends on
+// recorder internals. Entries are content-free: finding KINDS and a verdict,
+// never plaintext.
+type recorderFacade interface {
+	Record(audit.Entry)
 }
 
 // MeterFacade is the subset of the meter interface this handler needs.
@@ -135,6 +150,7 @@ type HandlerConfig struct {
 	Prefs         prefsSource // optional; runtime dashboard overrides
 	InjectionRules []injection.Rule
 	InjectionThreshold int
+	Recorder      recorderFacade // optional; nil disables dashboard recording
 }
 
 // NewHandler assembles a handler.
@@ -165,6 +181,7 @@ func NewHandler(c HandlerConfig) *Handler {
 		injScore:     c.InjectionThreshold,
 		confirm:      confirm,
 		flog:         newForwardLogLimiter(10 * time.Second),
+		recorder:     c.Recorder,
 		forwardClient: &http.Client{
 			Timeout: 120 * time.Second,
 			// Bypass the hosts-file redirect that transparent interception
@@ -213,6 +230,7 @@ func (h *Handler) OptOutSession(sessionKey string) {
 
 // Handle is the ServeHTTP body split out from server.go for readability.
 func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
+	start := time.Now()
 	// 1. Read request body.
 	body, err := io.ReadAll(io.LimitReader(r.Body, h.maxBodyBytes+1))
 	if err != nil {
@@ -236,6 +254,9 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 		h.forwardPassthrough(w, r, host, body)
 		return
 	}
+
+	// Best-effort model name for the audit entry (content-free).
+	model := extractModel(body)
 
 	// 2. Derive session key for opt-out tracking. Used by the redaction
 	//    loop (step 5) to check whether this session clicked "Allow" in

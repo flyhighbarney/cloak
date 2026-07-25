@@ -17,6 +17,7 @@ var secretKinds = map[string]struct{}{
 	"aws_key":      {},
 	"github_token": {},
 	"private_key":  {},
+	"password":     {}, // HIGH-tier credential; counts toward "secrets caught"
 }
 
 // piiKinds mirrors the PIIKind constants that represent personal data.
