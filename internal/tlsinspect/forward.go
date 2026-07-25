@@ -62,6 +62,10 @@ type Handler struct {
 	// and the session key, and is expected to fire a user-visible alert.
 	// nil = no notification (safe default, used in tests).
 	notifyFn func(kind, sessionKey string)
+
+	// flog collapses repeated forward-path errors so a retry storm can't
+	// bury real warnings under thousands of identical lines. See logdedup.go.
+	flog *forwardLogLimiter
 }
 
 // MeterFacade is the subset of the meter interface this handler needs.
@@ -160,6 +164,7 @@ func NewHandler(c HandlerConfig) *Handler {
 		injRules:     c.InjectionRules,
 		injScore:     c.InjectionThreshold,
 		confirm:      confirm,
+		flog:         newForwardLogLimiter(10 * time.Second),
 		forwardClient: &http.Client{
 			Timeout: 120 * time.Second,
 			// Bypass the hosts-file redirect that transparent interception
@@ -442,12 +447,34 @@ func (h *Handler) forwardPassthrough(w http.ResponseWriter, r *http.Request, hos
 // otherwise floods the log with thousands of near-identical warnings for a
 // non-event. Those go to Debug. Everything else (real upstream unreachability,
 // TLS failures, resolver errors) stays at Warn.
+//
+// On top of the severity split, repeated errors are deduplicated per
+// (msg, host, coarse-path, error-class) so a retry storm collapses to one line
+// per window carrying a "repeated" count, instead of thousands of identical
+// records that would bury a genuinely useful warning. See logdedup.go.
 func (h *Handler) logForwardErr(msg, host, path string, err error) {
 	if h.logger == nil {
 		return
 	}
+	debugLevel := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+
+	emit, count := true, 1
+	if h.flog != nil {
+		key := msg + "|" + host + "|" + coarsePath(path) + "|" + errClass(err)
+		emit, count = h.flog.record(time.Now(), key)
+	}
+	if !emit {
+		return
+	}
+
 	fields := log.Fields{"host": host, "path": path, "err": err.Error()}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if count > 1 {
+		// This one line stands in for `count` occurrences observed in the
+		// last window; without this the same storm would be `count` lines.
+		fields["repeated"] = count
+		fields["window_sec"] = int(h.flog.window / time.Second)
+	}
+	if debugLevel {
 		h.logger.Debug(msg, fields)
 		return
 	}
