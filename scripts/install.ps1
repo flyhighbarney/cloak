@@ -66,6 +66,11 @@ function Set-InspectListenPort {
 
 function Install-ScheduledTaskForUser {
     param([string]$TaskName, [string]$ExePath, [string]$ConfigDir)
+    # Kill any running process first — it holds :443 and the .exe file lock.
+    # Stop-ScheduledTask only stops the scheduler entry, not the running process.
+    Stop-Process -Name cloakline -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 800  # let the OS release the port and file lock
+
     if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
         Write-Host "  task: '$TaskName' already exists - updating" -ForegroundColor DarkGray
         try { Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue } catch {}
@@ -181,7 +186,7 @@ Write-Host ""
 Write-Host "[5/7] Verifying cloakline is actually listening..."
 $listeningOK = $false
 $adminOK = $false
-for ($i = 0; $i -lt 15; $i++) {
+for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Seconds 1
     if (-not $adminOK) {
         try {
@@ -199,8 +204,8 @@ for ($i = 0; $i -lt 15; $i++) {
     }
     if ($adminOK -and $listeningOK) { break }
 }
-if (-not $adminOK)    { Invoke-Fatal "cloakline admin :4001 did not respond within 15s - check Task Scheduler > 'cloakline' > History" }
-if (-not $listeningOK) { Invoke-Fatal "cloakline is not listening on :443 - port may be in use by another service, or bind failed" }
+if (-not $adminOK)    { Invoke-Fatal "cloakline admin :4001 did not respond within 20s - check Task Scheduler > 'cloakline' > History" }
+if (-not $listeningOK) { Invoke-Fatal "cloakline is not listening on :443 - port may be in use by another service, or bind failed. Run: netstat -ano | findstr :443" }
 
 Write-Host ""
 Write-Host "[6/7] Adding hosts entries (safe now - cloakline is confirmed listening)..."
