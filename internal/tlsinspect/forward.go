@@ -263,93 +263,41 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	//    nonce back to this session.
 	sessionKey := SessionKey(r.Header.Get("Authorization"), r.Header.Get("x-api-key"))
 
-	// 3. DLP scan. Only the LATEST user message is scanned for findings
-	//    (prior turns were already processed on their own turn). But
-	//    the replacement in step 5 still replaces on the WHOLE body —
-	//    so plaintext that Claude Code kept in its client-side chat log
-	//    gets scrubbed defensively even if we didn't scan history for
-	//    detection.
-	latest := extractLastUserPrompt(body)
-	scanText := latest
-	if scanText == "" {
-		scanText = strings.Join(extractPromptText(body), "\n")
-	}
-	scanned := patterns.Scan(scanText)
-	for _, r := range intent.FindPasswordCandidates(scanText) {
-		scanned = append(scanned, patterns.Finding{
-			Kind:  api.PIIPassword,
-			Start: r[0],
-			End:   r[1],
-			Text:  scanText[r[0]:r[1]],
-		})
-	}
-	for _, f := range scanned {
-		if h.resolveAction(string(f.Kind)) == "block" {
-			h.logger.Warn("tlsinspect.dlp_blocked", log.Fields{
-				"host": host,
-				"kind": string(f.Kind),
-			})
-			h.record(r, host, model, start, audit.VerdictBlockedDLP, []string{string(f.Kind)}, "")
-			http.Error(w, `{"error":"content blocked by policy","reason":"dlp","kind":"`+string(f.Kind)+`"}`, http.StatusForbidden)
-			return
-		}
-	}
-
-	// 5. Apply redaction.
-	//    - redact_one_way: replace with a static marker ([REDACTED_PASSWORD]
-	//      etc.). Plaintext is gone. A system notification fires the first
-	//      time this happens in a request, giving the user an "Allow session"
-	//      button that grants a 1-hour opt-out for HIGH-tier findings.
-	//    - redact (round-trip): tokenize via vault; pseudonym restored in
-	//      the response so Claude's reply shows real values.
-	//    - allow / warn: body unchanged; finding is flagged on dashboard.
+	// 3. DLP — JSON-level redaction in decoded-string space.
 	//
-	//    If the session has an active opt-out (user clicked "Allow session"),
-	//    HIGH-tier findings are passed through unmodified for the opt-out
-	//    window — matching what the notification says will happen.
+	//    Scanning and replacement both operate on decoded JSON string values,
+	//    never on raw JSON bytes. This eliminates the class of bugs where a
+	//    raw-bytes search finds a match inside base64 image data, JSON escape
+	//    sequences, or other non-text fields, corrupting the forwarded body.
+	//
+	//    Detection (notifications, stats) is scoped to the LAST user message
+	//    so previously-processed turns don't re-trigger alerts. Redaction is
+	//    applied defensively to ALL user messages so a credential that appeared
+	//    in an earlier turn is still scrubbed from the conversation history.
+	//
+	//    Fail-open: if the body cannot be parsed as JSON (e.g. a streaming
+	//    chunk, a malformed request), it passes through unmodified.
 	sessionOptedOut := h.confirm != nil && sessionKey != "" && h.confirm.IsOptedOut(sessionKey)
 	vault := newLocalVault()
-	// Redaction-safe tallies for the forwarded log line: what was detected
-	// (by kind) and what we did about it. Kind names and counts only — never
-	// the matched plaintext — so a user can confirm e.g. a password was
-	// one-way redacted without the secret ever reaching the log.
-	kinds := make(map[string]int, 8)
-	var nOneWay, nTokenized, nAllowed, nSkippedOptOut int
-	var notifiedOnce bool
+	st := h.applyDLPToJSON(body, sessionOptedOut, vault)
 
-	// Build a replacement table first, then apply all substitutions in a
-	// single pass via strings.NewReplacer (Aho-Corasick internally), instead
-	// of calling bytes.ReplaceAll once per finding which is O(body × findings).
-	// pairs is [old, new, old, new, ...] as required by strings.NewReplacer.
-	pairs := make([]string, 0, len(scanned)*2)
-	for _, f := range scanned {
-		kinds[string(f.Kind)]++
-		action := h.resolveAction(string(f.Kind))
-		if sessionOptedOut && api.TierForKind(f.Kind) == api.TierHigh {
-			nSkippedOptOut++
-			continue
-		}
-		switch action {
-		case "redact", "warn":
-			pseudo := vault.tokenize(string(f.Kind), f.Text)
-			pairs = append(pairs, f.Text, pseudo)
-			nTokenized++
-		case "redact_one_way":
-			marker := api.StaticMarkerForKind(f.Kind)
-			pairs = append(pairs, f.Text, marker)
-			nOneWay++
-			if !notifiedOnce && h.notifyFn != nil && sessionKey != "" {
-				notifiedOnce = true
-				h.notifyFn(string(f.Kind), sessionKey)
-			}
-		default:
-			nAllowed++
-		}
+	// Block before forwarding if any finding has action="block".
+	if st.blockKind != "" {
+		h.logger.Warn("tlsinspect.dlp_blocked", log.Fields{
+			"host": host,
+			"kind": st.blockKind,
+		})
+		h.record(r, host, model, start, audit.VerdictBlockedDLP, []string{st.blockKind}, "")
+		http.Error(w, `{"error":"content blocked by policy","reason":"dlp","kind":"`+st.blockKind+`"}`, http.StatusForbidden)
+		return
 	}
-	newBody := body
-	if len(pairs) > 0 {
-		newBody = []byte(strings.NewReplacer(pairs...).Replace(string(body)))
+
+	// Notify on the first high-tier one-way redaction (Windows balloon tip).
+	if st.notifyKind != "" && h.notifyFn != nil && sessionKey != "" {
+		h.notifyFn(st.notifyKind, sessionKey)
 	}
+
+	newBody := st.newBody
 
 	// 6. Forward to the real host.
 	upstreamURL := "https://" + host + r.URL.RequestURI()
@@ -394,36 +342,31 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(restored)
 
+	totalFindings := st.nOneWay + st.nTokenized + st.nAllowed + st.nSkipped
 	fwdFields := log.Fields{
 		"host":      host,
 		"status":    resp.StatusCode,
 		"in_bytes":  len(body),
 		"out_bytes": len(newBody),
-		"findings":  len(scanned),
+		"findings":  totalFindings,
 	}
-	if len(scanned) > 0 {
-		// Only attach the breakdown when something was actually found, so a
-		// healthy no-finding forward stays terse. Values are kind/action
-		// names and counts, never plaintext. Read it as: "redacted_one_way">0
-		// with "password" present in "kinds" proves a password was scrubbed
-		// before the body left the machine; "skipped_optout">0 means a
-		// HIGH-tier finding was deliberately passed through under an active
-		// "Allow session" opt-out.
-		fwdFields["kinds"] = summarizeKinds(kinds)
-		fwdFields["redacted_one_way"] = nOneWay
-		fwdFields["tokenized"] = nTokenized
-		fwdFields["allowed"] = nAllowed
-		if nSkippedOptOut > 0 {
-			fwdFields["skipped_optout"] = nSkippedOptOut
+	if totalFindings > 0 {
+		// Kind names and counts only — never plaintext content.
+		fwdFields["kinds"] = summarizeKinds(st.kinds)
+		fwdFields["redacted_one_way"] = st.nOneWay
+		fwdFields["tokenized"] = st.nTokenized
+		fwdFields["allowed"] = st.nAllowed
+		if st.nSkipped > 0 {
+			fwdFields["skipped_optout"] = st.nSkipped
 		}
 	}
 	h.logger.Info("tlsinspect.forwarded", fwdFields)
 
-	dlpKinds := make([]string, 0, len(kinds))
-	for k := range kinds {
+	dlpKinds := make([]string, 0, len(st.kinds))
+	for k := range st.kinds {
 		dlpKinds = append(dlpKinds, k)
 	}
-	verdict := audit.VerdictFromError(nil, nOneWay+nTokenized > 0, false)
+	verdict := audit.VerdictFromError(nil, st.nOneWay+st.nTokenized > 0, false)
 	h.record(r, host, model, start, verdict, dlpKinds, "")
 }
 
@@ -613,85 +556,257 @@ func (h *Handler) forwardBody(w http.ResponseWriter, r *http.Request, host strin
 
 // -------- Prompt text extraction --------
 
-// extractPromptText walks the JSON body of an AI API call and returns
-// every text-shaped user-content string. Supports OpenAI Chat Completions
-// and Anthropic Messages formats. Non-JSON bodies return [].
-func extractPromptText(body []byte) []string {
-	var v any
-	if err := json.Unmarshal(body, &v); err != nil {
-		return nil
-	}
-	var out []string
-	walkJSON(v, func(s string) { out = append(out, s) })
-	return out
+// dlpState is the result of one JSON-level DLP pass over a request body.
+type dlpState struct {
+	newBody    []byte         // redacted body (equals original if no changes)
+	kinds      map[string]int // kind → count; kind names only, never plaintext
+	nOneWay    int            // findings replaced with a static marker
+	nTokenized int            // findings replaced with a vault pseudonym
+	nAllowed   int            // findings flagged but not modified (allow/warn)
+	nSkipped   int            // high-tier findings skipped due to session opt-out
+	notifyKind string         // kind of the first high-tier one-way finding
+	blockKind  string         // non-empty if any finding has action="block"
 }
 
-// extractLastUserPrompt returns the text of ONLY the last user message
-// in an Anthropic or OpenAI request body. Used for turn-by-turn intent
-// checks that must not re-trigger on flagged content already in the
-// conversation history. Non-JSON or missing-messages bodies return "".
-func extractLastUserPrompt(body []byte) string {
-	// Try Anthropic shape first: {"messages":[{"role":"user","content":...}]}.
-	var probe struct {
-		Messages []struct {
+// applyDLPToJSON parses body as a JSON chat API request and applies DLP
+// to every user-message text content field in decoded-string space.
+//
+// Key properties:
+//   - Replacement happens on decoded Go strings, never on raw JSON bytes.
+//     This prevents matches inside base64 image data or JSON escape sequences
+//     from corrupting the forwarded body.
+//   - Detection signals (notifications, stats) are scoped to the LAST user
+//     message so prior turns cannot re-trigger alerts.
+//   - Redaction is applied to ALL user messages for defense-in-depth.
+//   - Fail-open: if the body cannot be parsed as a chat JSON, it is returned
+//     unmodified and the zero dlpState is returned.
+//   - Plaintext of any finding is NEVER written to logs or stored on disk.
+func (h *Handler) applyDLPToJSON(body []byte, sessionOptedOut bool, vault *localVault) dlpState {
+	st := dlpState{newBody: body, kinds: make(map[string]int)}
+
+	// Parse the outer document preserving all non-messages fields verbatim.
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return st // not chat JSON — pass through
+	}
+	msgsRaw, ok := doc["messages"]
+	if !ok {
+		return st
+	}
+	var msgs []json.RawMessage
+	if err := json.Unmarshal(msgsRaw, &msgs); err != nil {
+		return st
+	}
+
+	// Locate the last user message (detection scope).
+	lastUserIdx := -1
+	for i := len(msgs) - 1; i >= 0; i-- {
+		var probe struct {
+			Role string `json:"role"`
+		}
+		if json.Unmarshal(msgs[i], &probe) == nil && probe.Role == "user" {
+			lastUserIdx = i
+			break
+		}
+	}
+	if lastUserIdx < 0 {
+		return st
+	}
+
+	// Process every user message. Only the last one contributes to stats.
+	modified := false
+	for i, msgRaw := range msgs {
+		var msg struct {
 			Role    string          `json:"role"`
 			Content json.RawMessage `json:"content"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(body, &probe); err != nil {
-		return ""
-	}
-	// Walk backwards to the most recent user turn.
-	for i := len(probe.Messages) - 1; i >= 0; i-- {
-		m := probe.Messages[i]
-		if m.Role != "user" {
+		}
+		if json.Unmarshal(msgRaw, &msg) != nil || msg.Role != "user" {
 			continue
 		}
-		// content can be a bare string or a list of blocks.
-		var s string
-		if err := json.Unmarshal(m.Content, &s); err == nil {
-			return s
+		detect := (i == lastUserIdx)
+		newContent, msgMod := h.redactContentField(msg.Content, detect, sessionOptedOut, vault, &st)
+		if !msgMod {
+			continue
 		}
-		var blocks []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
+		// Splice modified content back preserving all other message fields.
+		var msgMap map[string]json.RawMessage
+		if json.Unmarshal(msgRaw, &msgMap) != nil {
+			continue // fail-open for this message
 		}
-		if err := json.Unmarshal(m.Content, &blocks); err == nil {
-			var b strings.Builder
-			for _, blk := range blocks {
-				if blk.Type == "text" {
-					if b.Len() > 0 {
-						b.WriteByte('\n')
-					}
-					b.WriteString(blk.Text)
-				}
-			}
-			return b.String()
+		msgMap["content"] = newContent
+		newMsgRaw, err := json.Marshal(msgMap)
+		if err != nil {
+			continue
 		}
-		return ""
+		msgs[i] = newMsgRaw
+		modified = true
 	}
-	return ""
+
+	if !modified {
+		return st
+	}
+
+	newMsgsRaw, err := json.Marshal(msgs)
+	if err != nil {
+		st.newBody = body // fail-open
+		return dlpState{newBody: body, kinds: make(map[string]int)}
+	}
+	doc["messages"] = newMsgsRaw
+	newBody, err := json.Marshal(doc)
+	if err != nil {
+		return dlpState{newBody: body, kinds: make(map[string]int)} // fail-open
+	}
+	st.newBody = newBody
+	return st
 }
 
-// walkJSON descends into the object and pulls every "content" / "text" /
-// "input" string. We're deliberately generous — better to over-scan than miss.
-func walkJSON(v any, emit func(string)) {
-	switch n := v.(type) {
-	case map[string]any:
-		for k, val := range n {
-			switch k {
-			case "content", "text", "input", "prompt", "system", "assistant":
-				if s, ok := val.(string); ok {
-					emit(s)
+// redactContentField handles the "content" field of a user message.
+// Content is either a plain string or an array of typed content blocks.
+// Only "text" blocks are scanned; image/tool blocks are left untouched.
+func (h *Handler) redactContentField(contentRaw json.RawMessage, detect, sessionOptedOut bool, vault *localVault, st *dlpState) (json.RawMessage, bool) {
+	// Plain-string content.
+	var s string
+	if json.Unmarshal(contentRaw, &s) == nil {
+		newS, mod := h.redactDecodedText(s, detect, sessionOptedOut, vault, st)
+		if !mod {
+			return contentRaw, false
+		}
+		b, _ := json.Marshal(newS)
+		return b, true
+	}
+
+	// Array of typed content blocks (multi-modal / tool content).
+	var blocks []json.RawMessage
+	if json.Unmarshal(contentRaw, &blocks) != nil {
+		return contentRaw, false // unknown shape — fail-open
+	}
+	modifiedAny := false
+	for i, blkRaw := range blocks {
+		var blk map[string]json.RawMessage
+		if json.Unmarshal(blkRaw, &blk) != nil {
+			continue
+		}
+		var typ string
+		if json.Unmarshal(blk["type"], &typ) != nil || typ != "text" {
+			continue // skip image, tool_use, tool_result, document, etc.
+		}
+		var text string
+		if json.Unmarshal(blk["text"], &text) != nil {
+			continue
+		}
+		newText, mod := h.redactDecodedText(text, detect, sessionOptedOut, vault, st)
+		if !mod {
+			continue
+		}
+		blk["text"], _ = json.Marshal(newText)
+		blocks[i], _ = json.Marshal(blk)
+		modifiedAny = true
+	}
+	if !modifiedAny {
+		return contentRaw, false
+	}
+	b, err := json.Marshal(blocks)
+	if err != nil {
+		return contentRaw, false
+	}
+	return b, true
+}
+
+// redactDecodedText applies DLP patterns to a decoded Go string and
+// returns the redacted string. Replacement is done entirely in decoded-
+// string space — no JSON bytes are involved, so encoding mismatches
+// are impossible. Plaintext of matched values is never stored or logged.
+func (h *Handler) redactDecodedText(text string, detect, sessionOptedOut bool, vault *localVault, st *dlpState) (string, bool) {
+	// Run pattern-based DLP followed by intent-based password detection.
+	scanned := patterns.Scan(text)
+	for _, r := range intent.FindPasswordCandidates(text) {
+		scanned = append(scanned, patterns.Finding{
+			Kind:  api.PIIPassword,
+			Start: r[0],
+			End:   r[1],
+			Text:  text[r[0]:r[1]],
+		})
+	}
+	if len(scanned) == 0 {
+		return text, false
+	}
+
+	// Build replacement pairs in decoded-string space.
+	pairs := make([]string, 0, len(scanned)*2)
+	for _, f := range scanned {
+		if detect {
+			st.kinds[string(f.Kind)]++
+		}
+		action := h.resolveAction(string(f.Kind))
+
+		if sessionOptedOut && api.TierForKind(f.Kind) == api.TierHigh {
+			if detect {
+				st.nSkipped++
+			}
+			continue
+		}
+
+		switch action {
+		case "redact", "warn":
+			pseudo := vault.tokenize(string(f.Kind), f.Text)
+			pairs = append(pairs, f.Text, pseudo)
+			if detect {
+				st.nTokenized++
+			}
+		case "redact_one_way":
+			marker := partialMaskOrStaticMarker(f)
+			pairs = append(pairs, f.Text, marker)
+			if detect {
+				st.nOneWay++
+				if st.notifyKind == "" {
+					st.notifyKind = string(f.Kind)
 				}
 			}
-			walkJSON(val, emit)
-		}
-	case []any:
-		for _, x := range n {
-			walkJSON(x, emit)
+		case "block":
+			if detect && st.blockKind == "" {
+				st.blockKind = string(f.Kind)
+			}
+		default: // "allow" / "" — flag on dashboard, never modify body
+			if detect {
+				st.nAllowed++
+			}
 		}
 	}
+
+	if len(pairs) == 0 {
+		return text, false
+	}
+	// Apply all replacements in a single pass on the DECODED string.
+	return strings.NewReplacer(pairs...).Replace(text), true
+}
+
+// partialMaskOrStaticMarker returns the replacement for a finding.
+// Credit cards and SSNs get their last 6 digits masked (keeps context
+// visible so Claude can still help). All other high-tier kinds are
+// fully replaced with a static marker.
+func partialMaskOrStaticMarker(f patterns.Finding) string {
+	switch f.Kind {
+	case api.PIICreditCard:
+		return maskLastNDigits(f.Text, 6) // 4111 1111 11** ****
+	case api.PIISSN:
+		return maskLastNDigits(f.Text, 6) // 123-**-****
+	}
+	return api.StaticMarkerForKind(f.Kind)
+}
+
+// maskLastNDigits replaces the last n digit characters in s with '*',
+// preserving any non-digit separators (spaces, dashes, dots).
+// Example: maskLastNDigits("4111-1111-1111-1111", 6) → "4111-1111-11**-****"
+func maskLastNDigits(s string, n int) string {
+	runes := []rune(s)
+	masked := 0
+	for i := len(runes) - 1; i >= 0 && masked < n; i-- {
+		if runes[i] >= '0' && runes[i] <= '9' {
+			runes[i] = '*'
+			masked++
+		}
+	}
+	return string(runes)
 }
 
 // -------- Per-request vault (no cross-request state) --------

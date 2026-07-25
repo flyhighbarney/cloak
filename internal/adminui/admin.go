@@ -348,8 +348,8 @@ var prefsRows = []prefsRow{
 	{Kind: "password", Tier: "high", Default: "redact_one_way", Description: "Labelled password blocks (asks for y/n on intentional pastes)"},
 	{Kind: "credit_card", Tier: "high", Default: "redact_one_way", Description: "Luhn-valid card numbers (asks for y/n on intentional pastes)"},
 	{Kind: "ssn", Tier: "medium", Default: "redact", Description: "US SSN xxx-xx-xxxx (tokenized round-trip)"},
-	{Kind: "email", Tier: "medium", Default: "redact", Description: "Email addresses (tokenized round-trip; toggle here)"},
-	{Kind: "phone", Tier: "medium", Default: "redact", Description: "Phone numbers (tokenized round-trip; toggle here)"},
+	{Kind: "email", Tier: "low", Default: "allow", Description: "Email addresses (flagged on dashboard; body never modified)"},
+	{Kind: "phone", Tier: "low", Default: "allow", Description: "Phone numbers (flagged on dashboard; body never modified)"},
 	{Kind: "ip_address", Tier: "low", Default: "allow", Description: "IPv4 dotted quads (flagged, not modified)"},
 	{Kind: "url_path", Tier: "low", Default: "allow", Description: "HTTPS URLs with a path (flagged, not modified)"},
 }

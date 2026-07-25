@@ -153,8 +153,9 @@ func TestHighTierPlaintextNeverReachesUpstream(t *testing.T) {
 	if !bytes.Contains(upstreamGot, []byte("[REDACTED_AWS_KEY]")) {
 		t.Errorf("upstream did not receive [REDACTED_AWS_KEY] marker; got: %s", upstreamGot)
 	}
-	if !bytes.Contains(upstreamGot, []byte("[REDACTED_CREDIT_CARD]")) {
-		t.Errorf("upstream did not receive [REDACTED_CREDIT_CARD] marker; got: %s", upstreamGot)
+	// Credit cards are partially masked (last 6 digits → ******) not fully replaced.
+	if !bytes.Contains(upstreamGot, []byte("4111111111******")) {
+		t.Errorf("upstream did not receive partial CC mask '4111111111******'; got: %s", upstreamGot)
 	}
 }
 

@@ -146,6 +146,18 @@ function Invoke-Fatal {
 
 Require-Admin
 
+Write-Host ""
+Write-Host "  ██████╗██╗      ██████╗  █████╗ ██╗  ██╗██╗     ██╗███╗   ██╗███████╗" -ForegroundColor Cyan
+Write-Host " ██╔════╝██║     ██╔═══██╗██╔══██╗██║ ██╔╝██║     ██║████╗  ██║██╔════╝" -ForegroundColor Cyan
+Write-Host " ██║     ██║     ██║   ██║███████║█████╔╝ ██║     ██║██╔██╗ ██║█████╗  " -ForegroundColor Cyan
+Write-Host " ██║     ██║     ██║   ██║██╔══██║██╔═██╗ ██║     ██║██║╚██╗██║██╔══╝  " -ForegroundColor Cyan
+Write-Host " ╚██████╗███████╗╚██████╔╝██║  ██║██║  ██╗███████╗██║██║ ╚████║███████╗" -ForegroundColor Cyan
+Write-Host "  ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝  ╚═══╝╚══════╝" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "         Welcome to Privacy & Protection" -ForegroundColor White
+Write-Host "   Your AI traffic, redacted before it leaves your machine." -ForegroundColor DarkGray
+Write-Host ""
+
 $RepoRoot     = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $ExePath      = Join-Path $RepoRoot "bin\cloakline.exe"
 $ConfigDir    = Join-Path $RepoRoot "configs"
@@ -268,13 +280,15 @@ try {
 }
 
 Write-Host ""
-Write-Host "Install complete." -ForegroundColor Cyan
-Write-Host "  Dashboard: http://127.0.0.1:4001/admin"
-Write-Host '  Try:       claude -p "help me reset password: hunter2xyz"'
-Write-Host '  Uninstall: scripts\uninstall.ps1 (from admin PowerShell)'
+Write-Host " ╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
+Write-Host " ║  Installation complete!  You are now protected.      ║" -ForegroundColor Green
+Write-Host " ╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
-Write-Host "IMPORTANT: If Claude Code (or any other client) starts failing with"
-Write-Host "'connection refused', it means cloakline stopped. Run:"
-Write-Host '  Get-ScheduledTask -TaskName "cloakline" | Start-ScheduledTask'
-Write-Host "Or uninstall to restore Claude Code:"
-Write-Host '  .\scripts\uninstall.ps1'
+Write-Host "  Dashboard : http://127.0.0.1:4001/admin" -ForegroundColor White
+Write-Host "  Live tail : .\bin\cloak.exe tail" -ForegroundColor White
+Write-Host "  Doctor    : .\bin\cloak.exe doctor" -ForegroundColor White
+Write-Host '  Uninstall : .\scripts\uninstall.ps1  (from admin PowerShell)' -ForegroundColor White
+Write-Host ""
+Write-Host "  Now you can chat on Claude Code knowing your PII stays on your machine." -ForegroundColor DarkGray
+Write-Host ""
+Read-Host "  Press Enter to close this window"

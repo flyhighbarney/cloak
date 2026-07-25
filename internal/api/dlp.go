@@ -78,8 +78,10 @@ func TierForKind(kind PIIKind) Tier {
 	case PIIAPIKey, PIIAWSKey, PIIGitHubToken, PIIPrivateKey,
 		PIICreditCard, PIIPassword:
 		return TierHigh
-	case PIISSN, PIIEmail, PIIPhone:
+	case PIISSN:
 		return TierMedium
+	case PIIEmail, PIIPhone:
+		return TierLow
 	case PIIIPAddress, PIIURLPath, PIIPersonName:
 		return TierLow
 	}
