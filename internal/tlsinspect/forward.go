@@ -274,6 +274,11 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 				"host":  host,
 				"score": result.Score,
 			})
+			var ruleIDs []string
+			for _, m := range result.Matches {
+				ruleIDs = append(ruleIDs, m.RuleID)
+			}
+			h.record(r, host, model, start, audit.VerdictBlockedPolicy, nil, result.Score, ruleIDs, "")
 			http.Error(w, `{"error":"content blocked by policy","reason":"injection"}`, http.StatusForbidden)
 			return
 		}
@@ -305,6 +310,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 				"host": host,
 				"kind": string(f.Kind),
 			})
+			h.record(r, host, model, start, audit.VerdictBlockedDLP, []string{string(f.Kind)}, 0, nil, "")
 			http.Error(w, `{"error":"content blocked by policy","reason":"dlp","kind":"`+string(f.Kind)+`"}`, http.StatusForbidden)
 			return
 		}
@@ -425,6 +431,34 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 		}
 	}
 	h.logger.Info("tlsinspect.forwarded", fwdFields)
+
+	dlpKinds := make([]string, 0, len(kinds))
+	for k := range kinds {
+		dlpKinds = append(dlpKinds, k)
+	}
+	verdict := audit.VerdictFromError(nil, nOneWay+nTokenized > 0, false)
+	h.record(r, host, model, start, verdict, dlpKinds, 0, nil, "")
+}
+
+// record appends a content-free audit entry for this request, if a recorder
+// is configured. Never pass plaintext findings — only kind names, rule IDs,
+// and the resolved verdict.
+func (h *Handler) record(r *http.Request, host, model string, start time.Time, verdict audit.Verdict, dlpFindings []string, injScore int, injRules []string, errMsg string) {
+	if h.recorder == nil {
+		return
+	}
+	h.recorder.Record(audit.Entry{
+		Endpoint:       r.URL.Path,
+		Mode:           "unary",
+		Upstream:       host,
+		Model:          model,
+		Verdict:        verdict,
+		DLPFindings:    dlpFindings,
+		InjectionScore: injScore,
+		InjectionRules: injRules,
+		DurationMS:     time.Since(start).Milliseconds(),
+		Error:          errMsg,
+	})
 }
 
 // isChatEndpoint reports whether the request path is one of the

@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -47,10 +48,30 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "update" {
+		if err := runUpdate(); err != nil {
+			fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// runUpdate self-updates cloakline via npm.
+func runUpdate() error {
+	fmt.Println("Updating cloakline to the latest version...")
+	cmd := exec.Command("npm", "install", "-g", "cloakline@latest")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("npm install failed: %w\n\nTo update manually, run: npm install -g cloakline@latest", err)
+	}
+	fmt.Println("cloakline updated successfully.")
+	return nil
 }
 
 func run() error {
