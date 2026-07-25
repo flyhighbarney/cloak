@@ -147,15 +147,11 @@ function Invoke-Fatal {
 Require-Admin
 
 Write-Host ""
-Write-Host "  ██████╗██╗      ██████╗  █████╗ ██╗  ██╗██╗     ██╗███╗   ██╗███████╗" -ForegroundColor Cyan
-Write-Host " ██╔════╝██║     ██╔═══██╗██╔══██╗██║ ██╔╝██║     ██║████╗  ██║██╔════╝" -ForegroundColor Cyan
-Write-Host " ██║     ██║     ██║   ██║███████║█████╔╝ ██║     ██║██╔██╗ ██║█████╗  " -ForegroundColor Cyan
-Write-Host " ██║     ██║     ██║   ██║██╔══██║██╔═██╗ ██║     ██║██║╚██╗██║██╔══╝  " -ForegroundColor Cyan
-Write-Host " ╚██████╗███████╗╚██████╔╝██║  ██║██║  ██╗███████╗██║██║ ╚████║███████╗" -ForegroundColor Cyan
-Write-Host "  ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝  ╚═══╝╚══════╝" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "         Welcome to Privacy & Protection" -ForegroundColor White
-Write-Host "   Your AI traffic, redacted before it leaves your machine." -ForegroundColor DarkGray
+Write-Host "  ==========================================" -ForegroundColor Cyan
+Write-Host "       CLOAKLINE - Privacy and Protection   " -ForegroundColor Cyan
+Write-Host "    Your AI traffic, redacted before it     " -ForegroundColor Cyan
+Write-Host "         leaves your machine.               " -ForegroundColor Cyan
+Write-Host "  ==========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $RepoRoot     = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -280,9 +276,9 @@ try {
 }
 
 Write-Host ""
-Write-Host " ╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host " ║  Installation complete!  You are now protected.      ║" -ForegroundColor Green
-Write-Host " ╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "  ======================================================" -ForegroundColor Green
+Write-Host "    Installation complete!  You are now protected.      " -ForegroundColor Green
+Write-Host "  ======================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Dashboard : http://127.0.0.1:4001/admin" -ForegroundColor White
 Write-Host "  Live tail : .\bin\cloak.exe tail" -ForegroundColor White
