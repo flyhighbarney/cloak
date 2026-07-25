@@ -279,9 +279,57 @@ async function uninstall(argv) {
     return status;
 }
 
+// update refreshes the installed binaries to the latest GitHub Release
+// WITHOUT a full uninstall — CA trust, configs, prefs, and vault are all left
+// in place. It exists because a plain `npx cloakline install` is a no-op when
+// binaries already exist (ensureInstalled only downloads when they're
+// missing), so there was previously no in-place upgrade path.
+//
+// Steps: stop the running daemon (so Windows will release the .exe file lock),
+// delete the bin dir (forcing ensureInstalled to re-download latest), then run
+// the normal install flow which fetches the newest release and re-bootstraps
+// the daemon against it. Requires the same elevation as install.
+async function update(argv) {
+    const root = installRoot();
+    if (!fs.existsSync(root)) {
+        console.log('cloakline is not installed — run: npx cloakline install');
+        return 1;
+    }
+
+    // Stop the daemon first; a running cloakline.exe holds a file lock that
+    // would otherwise block removal of the old binary on Windows.
+    if (process.platform === 'win32') {
+        spawnSync('powershell', [
+            '-NoProfile', '-Command',
+            "Stop-ScheduledTask -TaskName cloakline -ErrorAction SilentlyContinue; " +
+            "Stop-Process -Name cloakline -Force -ErrorAction SilentlyContinue",
+        ], { stdio: 'ignore' });
+    } else {
+        spawnSync('pkill', ['-f', 'cloakline'], { stdio: 'ignore' });
+    }
+
+    // Force a fresh pull: ensureInstalled() only downloads when binaries are
+    // absent, so removing bin/ is what turns the subsequent install into an
+    // actual upgrade instead of a no-op.
+    const binDir = path.join(root, 'bin');
+    try {
+        if (fs.existsSync(binDir)) {
+            fs.rmSync(binDir, { recursive: true, force: true });
+        }
+    } catch (e) {
+        console.error('  could not remove ' + binDir + ': ' + e.message);
+        console.error('  stop the cloakline daemon and retry, or run: npx cloakline uninstall && npx cloakline install');
+        return 1;
+    }
+
+    console.log('  fetching latest release + re-bootstrapping (trust/config/vault preserved)...');
+    return install(argv);
+}
+
 module.exports = {
     install,
     uninstall,
+    update,
     cloakBin,
     runBinary,
     installRoot,

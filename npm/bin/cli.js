@@ -18,7 +18,7 @@
 'use strict';
 
 const path = require('path');
-const { install, uninstall, cloakBin, runBinary } = require('../lib/install');
+const { install, uninstall, update, cloakBin, runBinary } = require('../lib/install');
 
 async function main() {
     const [subcmd, ...rest] = process.argv.slice(2);
@@ -36,6 +36,10 @@ async function main() {
 
         case 'uninstall':
             return uninstall(rest);
+
+        case 'update':
+        case 'upgrade':
+            return update(rest);
 
         case '-v':
         case '--version':
@@ -59,6 +63,8 @@ function printHelp() {
     p('    npx cloakline <command> [args...]\n');
     p('COMMANDS');
     p('    install       Download binaries + run platform bootstrap (Windows/macOS).');
+    p('    update        Upgrade binaries to the latest release in place');
+    p('                  (keeps CA trust, config, and vault).');
     p('    uninstall     Reverse the install.');
     p('    scan <file>   Offline DLP scan of a file or stdin.');
     p('    doctor        Local health check.');
