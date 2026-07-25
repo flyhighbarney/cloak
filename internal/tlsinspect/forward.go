@@ -18,7 +18,6 @@ import (
 	"cloakline/internal/crypto/aesbox"
 	"cloakline/internal/dlp/patterns"
 	"cloakline/internal/obs/log"
-	"cloakline/internal/stage/injection"
 	"cloakline/internal/stage/intent"
 )
 
@@ -50,9 +49,6 @@ type Handler struct {
 
 	dlpActions dlpActionResolver // per-kind action policy (config)
 	prefs      prefsSource       // per-kind override (dashboard, runtime)
-	injRules   []injection.Rule
-	injScore   int // threshold; sum > threshold → block
-
 	// confirm tracks per-session opt-outs (user clicked "Allow session").
 	// It no longer stores pending bodies — the old y/n CLI prompt flow
 	// has been replaced by a system notification + admin URL.
@@ -148,8 +144,6 @@ type HandlerConfig struct {
 	MaxBodyBytes  int64
 	DLPActions    dlpActionResolver
 	Prefs         prefsSource // optional; runtime dashboard overrides
-	InjectionRules []injection.Rule
-	InjectionThreshold int
 	Recorder      recorderFacade // optional; nil disables dashboard recording
 }
 
@@ -157,12 +151,6 @@ type HandlerConfig struct {
 func NewHandler(c HandlerConfig) *Handler {
 	if c.MaxBodyBytes == 0 {
 		c.MaxBodyBytes = 4 << 20
-	}
-	if c.InjectionThreshold == 0 {
-		c.InjectionThreshold = 50
-	}
-	if len(c.InjectionRules) == 0 {
-		c.InjectionRules = injection.BuiltinRules()
 	}
 	// Initialise the confirmation store. Failure to mint the AES key
 	// is non-fatal — we log and continue with confirm disabled, since
@@ -177,8 +165,6 @@ func NewHandler(c HandlerConfig) *Handler {
 		maxBodyBytes: c.MaxBodyBytes,
 		dlpActions:   c.DLPActions,
 		prefs:        c.Prefs,
-		injRules:     c.InjectionRules,
-		injScore:     c.InjectionThreshold,
 		confirm:      confirm,
 		flog:         newForwardLogLimiter(10 * time.Second),
 		recorder:     c.Recorder,
@@ -264,42 +250,14 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	//    nonce back to this session.
 	sessionKey := SessionKey(r.Header.Get("Authorization"), r.Header.Get("x-api-key"))
 
-	// 3. Extract prompt text and run injection scorer.
-	// Only the latest user message is scored — prior turns were already
-	// scanned on their own turn. Scoring the full history causes false
-	// positives when earlier turns legitimately contain injection-like text
-	// (e.g. a user asking Claude to explain injection attacks, or cloakline's
-	// own test fixtures appearing in the accumulated context window).
-	pieces := extractPromptText(body)
-	joined := strings.Join(pieces, "\n")
-	latest := extractLastUserPrompt(body)
-	injText := latest
-	if injText == "" {
-		injText = joined
-	}
-	if injText != "" {
-		result := injection.Score(injText, h.injRules)
-		if result.Score >= h.injScore {
-			h.logger.Warn("tlsinspect.injection_blocked", log.Fields{
-				"host":  host,
-				"score": result.Score,
-			})
-			var ruleIDs []string
-			for _, m := range result.Matches {
-				ruleIDs = append(ruleIDs, m.RuleID)
-			}
-			h.record(r, host, model, start, audit.VerdictBlockedPolicy, nil, result.Score, ruleIDs, "")
-			http.Error(w, `{"error":"content blocked by policy","reason":"injection"}`, http.StatusForbidden)
-			return
-		}
-	}
-
-	// 4. DLP scan. Only the LATEST user message is scanned for findings
+	// 3. DLP scan. Only the LATEST user message is scanned for findings
 	//    (prior turns were already processed on their own turn). But
 	//    the replacement in step 5 still replaces on the WHOLE body —
 	//    so plaintext that Claude Code kept in its client-side chat log
 	//    gets scrubbed defensively even if we didn't scan history for
 	//    detection.
+	latest := extractLastUserPrompt(body)
+	joined := strings.Join(extractPromptText(body), "\n")
 	scanText := latest
 	if scanText == "" {
 		scanText = joined
@@ -319,7 +277,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 				"host": host,
 				"kind": string(f.Kind),
 			})
-			h.record(r, host, model, start, audit.VerdictBlockedDLP, []string{string(f.Kind)}, 0, nil, "")
+			h.record(r, host, model, start, audit.VerdictBlockedDLP, []string{string(f.Kind)}, "")
 			http.Error(w, `{"error":"content blocked by policy","reason":"dlp","kind":"`+string(f.Kind)+`"}`, http.StatusForbidden)
 			return
 		}
@@ -454,27 +412,25 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 		dlpKinds = append(dlpKinds, k)
 	}
 	verdict := audit.VerdictFromError(nil, nOneWay+nTokenized > 0, false)
-	h.record(r, host, model, start, verdict, dlpKinds, 0, nil, "")
+	h.record(r, host, model, start, verdict, dlpKinds, "")
 }
 
 // record appends a content-free audit entry for this request, if a recorder
 // is configured. Never pass plaintext findings — only kind names, rule IDs,
 // and the resolved verdict.
-func (h *Handler) record(r *http.Request, host, model string, start time.Time, verdict audit.Verdict, dlpFindings []string, injScore int, injRules []string, errMsg string) {
+func (h *Handler) record(r *http.Request, host, model string, start time.Time, verdict audit.Verdict, dlpFindings []string, errMsg string) {
 	if h.recorder == nil {
 		return
 	}
 	h.recorder.Record(audit.Entry{
-		Endpoint:       r.URL.Path,
-		Mode:           "unary",
-		Upstream:       host,
-		Model:          model,
-		Verdict:        verdict,
-		DLPFindings:    dlpFindings,
-		InjectionScore: injScore,
-		InjectionRules: injRules,
-		DurationMS:     time.Since(start).Milliseconds(),
-		Error:          errMsg,
+		Endpoint:    r.URL.Path,
+		Mode:        "unary",
+		Upstream:    host,
+		Model:       model,
+		Verdict:     verdict,
+		DLPFindings: dlpFindings,
+		DurationMS:  time.Since(start).Milliseconds(),
+		Error:       errMsg,
 	})
 }
 

@@ -460,11 +460,10 @@ func startInspect(
 		return err
 	}
 	handlerCfg := tlsinspect.HandlerConfig{
-		Logger:             logger,
-		Meter:              noopInspectMeter{},
-		MaxBodyBytes:       ir.MaxBodyBytes,
-		DLPActions:         inspectActionResolver{actions},
-		InjectionThreshold: ir.Injection.Threshold,
+		Logger:       logger,
+		Meter:        noopInspectMeter{},
+		MaxBodyBytes: ir.MaxBodyBytes,
+		DLPActions:   inspectActionResolver{actions},
 	}
 	if prefsStore != nil {
 		handlerCfg.Prefs = prefsStore
