@@ -3,6 +3,8 @@ package tlsinspect
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -108,4 +110,26 @@ func coarsePath(path string) string {
 		return "/"
 	}
 	return "/" + strings.Join(kept, "/")
+}
+
+// summarizeKinds renders a detected-finding tally as a deterministic
+// "kind=count,kind=count" string (sorted for stable output). It deliberately
+// carries only finding KIND names and counts — never the matched plaintext —
+// so it is safe to log. This is what lets a user confirm from the log that a
+// "password" finding was seen (and, alongside the action tallies, that it was
+// redacted) without the secret ever touching the log file.
+func summarizeKinds(kinds map[string]int) string {
+	if len(kinds) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(kinds))
+	for k := range kinds {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", k, kinds[k]))
+	}
+	return strings.Join(parts, ",")
 }

@@ -305,23 +305,35 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	vault := newLocalVault()
 	newBody := body
 	var notifiedOnce bool
+	// Redaction-safe tallies for the forwarded log line: what was detected
+	// (by kind) and what we did about it. Kind names and counts only — never
+	// the matched plaintext — so a user can confirm e.g. a password was
+	// one-way redacted without the secret ever reaching the log.
+	kinds := make(map[string]int, 8)
+	var nOneWay, nTokenized, nAllowed, nSkippedOptOut int
 	for _, f := range scanned {
+		kinds[string(f.Kind)]++
 		action := h.resolveAction(string(f.Kind))
 		if sessionOptedOut && api.TierForKind(f.Kind) == api.TierHigh {
+			nSkippedOptOut++
 			continue
 		}
 		switch action {
 		case "redact", "warn":
 			pseudo := vault.tokenize(string(f.Kind), f.Text)
 			newBody = bytes.ReplaceAll(newBody, []byte(f.Text), []byte(pseudo))
+			nTokenized++
 		case "redact_one_way":
 			marker := api.StaticMarkerForKind(f.Kind)
 			newBody = bytes.ReplaceAll(newBody, []byte(f.Text), []byte(marker))
+			nOneWay++
 			// Fire the notification at most once per request.
 			if !notifiedOnce && h.notifyFn != nil && sessionKey != "" {
 				notifiedOnce = true
 				h.notifyFn(string(f.Kind), sessionKey)
 			}
+		default:
+			nAllowed++
 		}
 	}
 
@@ -368,13 +380,30 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(restored)
 
-	h.logger.Info("tlsinspect.forwarded", log.Fields{
-		"host":        host,
-		"status":      resp.StatusCode,
-		"in_bytes":    len(body),
-		"out_bytes":   len(newBody),
-		"findings":    len(scanned),
-	})
+	fwdFields := log.Fields{
+		"host":      host,
+		"status":    resp.StatusCode,
+		"in_bytes":  len(body),
+		"out_bytes": len(newBody),
+		"findings":  len(scanned),
+	}
+	if len(scanned) > 0 {
+		// Only attach the breakdown when something was actually found, so a
+		// healthy no-finding forward stays terse. Values are kind/action
+		// names and counts, never plaintext. Read it as: "redacted_one_way">0
+		// with "password" present in "kinds" proves a password was scrubbed
+		// before the body left the machine; "skipped_optout">0 means a
+		// HIGH-tier finding was deliberately passed through under an active
+		// "Allow session" opt-out.
+		fwdFields["kinds"] = summarizeKinds(kinds)
+		fwdFields["redacted_one_way"] = nOneWay
+		fwdFields["tokenized"] = nTokenized
+		fwdFields["allowed"] = nAllowed
+		if nSkippedOptOut > 0 {
+			fwdFields["skipped_optout"] = nSkippedOptOut
+		}
+	}
+	h.logger.Info("tlsinspect.forwarded", fwdFields)
 }
 
 // isChatEndpoint reports whether the request path is one of the

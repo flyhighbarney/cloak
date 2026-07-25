@@ -1,6 +1,7 @@
 package tlsinspect
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,6 +58,22 @@ func TestCoarsePath(t *testing.T) {
 		if got := coarsePath(in); got != want {
 			t.Errorf("coarsePath(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestSummarizeKinds(t *testing.T) {
+	if got := summarizeKinds(nil); got != "" {
+		t.Errorf("empty map = %q, want \"\"", got)
+	}
+	// Deterministic (sorted) output regardless of map iteration order.
+	got := summarizeKinds(map[string]int{"password": 1, "email": 4, "url_path": 3140})
+	want := "email=4,password=1,url_path=3140"
+	if got != want {
+		t.Errorf("summarizeKinds = %q, want %q", got, want)
+	}
+	// The matched plaintext is never part of the output — only kind + count.
+	if strings.Contains(summarizeKinds(map[string]int{"password": 1}), "=") == false {
+		t.Error("expected kind=count form")
 	}
 }
 
