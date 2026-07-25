@@ -34,6 +34,13 @@ type Source struct {
 // Snapshot writes a zip of every existing Source into destDir and returns the
 // archive path. The filename is backup-<UTC-timestamp>.zip so lexical sort ==
 // chronological sort (used by Rotate).
+//
+// destDir is excluded from every Source walk. Without this, a Source whose
+// Path is an ancestor of destDir (as it is in cloakline's own usage — the
+// "state" source is the daemon's whole config dir, and destDir is
+// "<config dir>/backups") would zip up its own prior archives, which
+// themselves contain their still-earlier archives. Each restart's backup
+// would then be strictly larger than the last, snowballing without bound.
 func Snapshot(destDir string, sources []Source) (string, error) {
 	if err := os.MkdirAll(destDir, 0o700); err != nil {
 		return "", fmt.Errorf("backup: mkdir %s: %w", destDir, err)
@@ -54,6 +61,11 @@ func Snapshot(destDir string, sources []Source) (string, error) {
 		}
 	}()
 
+	absDest, err := filepath.Abs(destDir)
+	if err != nil {
+		return "", fmt.Errorf("backup: resolve %s: %w", destDir, err)
+	}
+
 	zw := zip.NewWriter(f)
 	for _, s := range sources {
 		info, statErr := os.Stat(s.Path)
@@ -61,7 +73,7 @@ func Snapshot(destDir string, sources []Source) (string, error) {
 			continue // missing source — skip, not an error
 		}
 		if info.IsDir() {
-			if err := addDir(zw, s.Path, s.Label); err != nil {
+			if err := addDir(zw, s.Path, s.Label, absDest); err != nil {
 				return "", err
 			}
 			continue
@@ -77,10 +89,18 @@ func Snapshot(destDir string, sources []Source) (string, error) {
 	return out, nil
 }
 
-func addDir(zw *zip.Writer, root, label string) error {
+func addDir(zw *zip.Writer, root, label, excludeAbs string) error {
 	return filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // unreadable entry — skip
+		}
+		absP, aerr := filepath.Abs(p)
+		if aerr == nil && excludeAbs != "" &&
+			(absP == excludeAbs || strings.HasPrefix(absP, excludeAbs+string(os.PathSeparator))) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if info.IsDir() {
 			return nil

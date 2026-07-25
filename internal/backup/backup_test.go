@@ -1,8 +1,10 @@
 package backup
 
 import (
+	"archive/zip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +49,42 @@ func TestSnapshotRestoreRoundTrip(t *testing.T) {
 	assertFile(t, filepath.Join(restoreRoot, "state", "prefs.bin"), "secret-prefs")
 	assertFile(t, filepath.Join(restoreRoot, "state", "ca", "root.pem"), "PEM DATA")
 	assertFile(t, filepath.Join(restoreRoot, "config", "pipeline.yaml"), "inspect: {enabled: true}")
+}
+
+// TestSnapshotExcludesOwnDestDir: this is cloakline's real production shape —
+// destDir ("backups") lives INSIDE a Source's Path (the whole state dir). A
+// naive recursive walk would zip up the destination archive's own directory,
+// including any prior backups sitting there — each snapshot would embed
+// every earlier one, snowballing without bound. Confirms that never happens.
+func TestSnapshotExcludesOwnDestDir(t *testing.T) {
+	tmp := t.TempDir()
+
+	stateDir := filepath.Join(tmp, "state")
+	writeFile(t, filepath.Join(stateDir, "prefs.bin"), "secret-prefs")
+
+	dest := filepath.Join(stateDir, "backups") // nested INSIDE stateDir
+
+	// Simulate a prior (large) backup already sitting in dest.
+	writeFile(t, filepath.Join(dest, "backup-OLD.zip"), "pretend-this-is-huge")
+
+	sources := []Source{{Path: stateDir, Label: "state"}}
+
+	archive, err := Snapshot(dest, sources)
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+
+	zr, err := zip.OpenReader(archive)
+	if err != nil {
+		t.Fatalf("open archive: %v", err)
+	}
+	defer zr.Close()
+
+	for _, f := range zr.File {
+		if strings.Contains(f.Name, "backups") {
+			t.Fatalf("archive must not contain its own destDir, found entry %q", f.Name)
+		}
+	}
 }
 
 // TestRotateKeepsNewest: after many snapshots, only the newest `keep` survive.
