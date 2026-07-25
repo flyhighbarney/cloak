@@ -30,8 +30,8 @@ func DefaultLogFile() (string, error) {
 }
 
 const (
-	maxLogFileBytes = 10 << 20 // 10 MiB
-	maxLogBackups   = 3
+	maxLogFileBytes = 5 << 20 // 5 MiB per file
+	maxLogBackups   = 2       // +1 active = 15 MiB total on disk
 )
 
 // rotatingFile is an io.WriteCloser that rotates itself once it exceeds

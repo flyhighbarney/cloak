@@ -151,7 +151,7 @@ func setupFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatalf("cel engine: %v", err)
 	}
-	policyExpr := `snapshot.candidates.filter(u, u.kind == "openai").map(u, {"upstream_id": u.id, "reason": "test"})[0]`
+	policyExpr := `snapshot.candidates.filter(u, u.kind == "openai")[0].id`
 	compiled, err := polEng.Compile(policyExpr, api.PolicyKindRouting, "test-policy")
 	if err != nil {
 		t.Fatalf("policy compile: %v", err)
@@ -191,7 +191,7 @@ func setupFixture(t *testing.T) *fixture {
 		t.Fatalf("auth add: %v", err)
 	}
 
-	adminHandler, _ := adminui.New(recorder, "test")
+	adminHandler, _ := adminui.New(recorder, "test", nil)
 
 	// Bind ephemeral ports.
 	trafficPort := freePort(t)

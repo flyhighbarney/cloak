@@ -265,10 +265,20 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	sessionKey := SessionKey(r.Header.Get("Authorization"), r.Header.Get("x-api-key"))
 
 	// 3. Extract prompt text and run injection scorer.
+	// Only the latest user message is scored — prior turns were already
+	// scanned on their own turn. Scoring the full history causes false
+	// positives when earlier turns legitimately contain injection-like text
+	// (e.g. a user asking Claude to explain injection attacks, or cloakline's
+	// own test fixtures appearing in the accumulated context window).
 	pieces := extractPromptText(body)
 	joined := strings.Join(pieces, "\n")
-	if joined != "" {
-		result := injection.Score(joined, h.injRules)
+	latest := extractLastUserPrompt(body)
+	injText := latest
+	if injText == "" {
+		injText = joined
+	}
+	if injText != "" {
+		result := injection.Score(injText, h.injRules)
 		if result.Score >= h.injScore {
 			h.logger.Warn("tlsinspect.injection_blocked", log.Fields{
 				"host":  host,
@@ -286,11 +296,10 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 
 	// 4. DLP scan. Only the LATEST user message is scanned for findings
 	//    (prior turns were already processed on their own turn). But
-	//    the replacement in step 5 still uses bytes.ReplaceAll on the
-	//    WHOLE body — so plaintext that Claude Code kept in its
-	//    client-side chat log gets scrubbed defensively even if we
-	//    didn't scan history for detection.
-	latest := extractLastUserPrompt(body)
+	//    the replacement in step 5 still replaces on the WHOLE body —
+	//    so plaintext that Claude Code kept in its client-side chat log
+	//    gets scrubbed defensively even if we didn't scan history for
+	//    detection.
 	scanText := latest
 	if scanText == "" {
 		scanText = joined
@@ -330,14 +339,19 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 	//    window — matching what the notification says will happen.
 	sessionOptedOut := h.confirm != nil && sessionKey != "" && h.confirm.IsOptedOut(sessionKey)
 	vault := newLocalVault()
-	newBody := body
-	var notifiedOnce bool
 	// Redaction-safe tallies for the forwarded log line: what was detected
 	// (by kind) and what we did about it. Kind names and counts only — never
 	// the matched plaintext — so a user can confirm e.g. a password was
 	// one-way redacted without the secret ever reaching the log.
 	kinds := make(map[string]int, 8)
 	var nOneWay, nTokenized, nAllowed, nSkippedOptOut int
+	var notifiedOnce bool
+
+	// Build a replacement table first, then apply all substitutions in a
+	// single pass via strings.NewReplacer (Aho-Corasick internally), instead
+	// of calling bytes.ReplaceAll once per finding which is O(body × findings).
+	// pairs is [old, new, old, new, ...] as required by strings.NewReplacer.
+	pairs := make([]string, 0, len(scanned)*2)
 	for _, f := range scanned {
 		kinds[string(f.Kind)]++
 		action := h.resolveAction(string(f.Kind))
@@ -348,13 +362,12 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 		switch action {
 		case "redact", "warn":
 			pseudo := vault.tokenize(string(f.Kind), f.Text)
-			newBody = bytes.ReplaceAll(newBody, []byte(f.Text), []byte(pseudo))
+			pairs = append(pairs, f.Text, pseudo)
 			nTokenized++
 		case "redact_one_way":
 			marker := api.StaticMarkerForKind(f.Kind)
-			newBody = bytes.ReplaceAll(newBody, []byte(f.Text), []byte(marker))
+			pairs = append(pairs, f.Text, marker)
 			nOneWay++
-			// Fire the notification at most once per request.
 			if !notifiedOnce && h.notifyFn != nil && sessionKey != "" {
 				notifiedOnce = true
 				h.notifyFn(string(f.Kind), sessionKey)
@@ -362,6 +375,10 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, host string) {
 		default:
 			nAllowed++
 		}
+	}
+	newBody := body
+	if len(pairs) > 0 {
+		newBody = []byte(strings.NewReplacer(pairs...).Replace(string(body)))
 	}
 
 	// 6. Forward to the real host.
