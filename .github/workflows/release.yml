@@ -49,8 +49,13 @@ jobs:
           CGO_ENABLED: 0
         run: |
           mkdir -p dist/bin
-          go build -trimpath -ldflags="-s -w" -o "dist/bin/cloakline${{ matrix.ext }}" ./cmd/cloakline
-          go build -trimpath -ldflags="-s -w" -o "dist/bin/cloak${{ matrix.ext }}"     ./cmd/cloak
+          # Stamp version/commit/build-time into the daemon so every log line
+          # carries the build identity (cmd/cloakline/buildinfo.go). This is
+          # what lets a pasted log prove which release is actually running.
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          STAMP="-X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }} -X main.buildTime=${BUILD_TIME}"
+          go build -trimpath -ldflags="-s -w ${STAMP}" -o "dist/bin/cloakline${{ matrix.ext }}" ./cmd/cloakline
+          go build -trimpath -ldflags="-s -w"          -o "dist/bin/cloak${{ matrix.ext }}"     ./cmd/cloak
 
       - name: Assemble release layout
         run: |

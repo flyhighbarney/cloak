@@ -1,7 +1,15 @@
 # cloakline uninstaller. Removes the scheduled task, restores the hosts
-# file, and reverts inspect.listen to :8443. Leaves the built binaries
-# and the CA cert in place — remove those manually or with
-# 'cloak trust remove' + 'del bin\*.exe' if you want a full wipe.
+# file, and reverts inspect.listen to :8443. Leaves the CA cert in place -
+# remove that with 'cloak trust remove'.
+#
+# Pass -Purge to also delete the built binaries under <root>\bin. The npm
+# wrapper (npx cloakline uninstall) removes them regardless, because
+# leaving them makes the next install silently reuse the stale binary
+# instead of downloading the new release.
+
+param(
+    [switch]$Purge
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -47,7 +55,24 @@ if (Test-Path $PipelineYaml) {
     Write-Host "  reverted" -ForegroundColor Green
 }
 
+if ($Purge) {
+    Write-Host "[*] Purging binaries..."
+    $BinDir = Join-Path $RepoRoot "bin"
+    if (Test-Path $BinDir) {
+        try {
+            Remove-Item -Path $BinDir -Recurse -Force
+            Write-Host "  removed $BinDir" -ForegroundColor Green
+        } catch {
+            Write-Host "  could not remove $BinDir : $_" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  no bin directory at $BinDir" -ForegroundColor DarkGray
+    }
+}
+
 Write-Host ""
 Write-Host "Uninstall complete." -ForegroundColor Cyan
-Write-Host "  CA still trusted — remove with: cloak trust remove"
-Write-Host "  Binaries left in bin/ — delete manually if desired"
+Write-Host "  CA still trusted - remove with: cloak trust remove"
+if (-not $Purge) {
+    Write-Host "  Binaries left in bin/ - re-run with -Purge (or use 'npx cloakline uninstall') to remove"
+}

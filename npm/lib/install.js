@@ -237,26 +237,46 @@ async function uninstall(argv) {
         console.log('cloakline is not installed (no directory at ' + root + ')');
         return 0;
     }
+    let status = 0;
     if (process.platform === 'win32') {
         const script = path.join(root, 'scripts', 'uninstall.ps1');
         if (!fs.existsSync(script)) {
             throw new Error(`uninstall.ps1 not found — installation is corrupt`);
         }
         // Self-elevate via a nested powershell RunAs.
-        return runBinary('powershell', [
+        status = runBinary('powershell', [
             '-NoProfile', '-ExecutionPolicy', 'Bypass',
             '-Command',
             `Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${script}' -Wait`,
         ]);
-    }
-    if (process.platform === 'darwin') {
+    } else if (process.platform === 'darwin') {
         const script = path.join(root, 'scripts', 'uninstall.sh');
         if (!fs.existsSync(script)) {
             throw new Error(`uninstall.sh not found — installation is corrupt`);
         }
-        return runBinary('bash', [script, ...argv]);
+        status = runBinary('bash', [script, ...argv]);
+    } else {
+        throw new Error(`uninstall not supported on platform: ${process.platform}`);
     }
-    throw new Error(`uninstall not supported on platform: ${process.platform}`);
+
+    // Remove the downloaded binaries. The platform uninstall scripts
+    // deliberately LEAVE these in place, but that breaks the reinstall
+    // path: ensureInstalled() only downloads when the binaries are
+    // missing, so a later `npx cloakline install` would silently reuse
+    // the OLD binary and never pull the new release — the classic "my
+    // fix didn't take effect" trap during iterative testing. Deleting the
+    // bin dir here guarantees the next install fetches a fresh build.
+    const binDir = path.join(root, 'bin');
+    try {
+        if (fs.existsSync(binDir)) {
+            fs.rmSync(binDir, { recursive: true, force: true });
+            console.log('  removed binaries at ' + binDir + ' (next install pulls fresh)');
+        }
+    } catch (e) {
+        console.error('  warning: could not remove ' + binDir + ': ' + e.message);
+        console.error('  delete it manually so the next install downloads a fresh build.');
+    }
+    return status;
 }
 
 module.exports = {

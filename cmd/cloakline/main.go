@@ -64,8 +64,30 @@ func run() error {
 
 	// Log level from env; defaults to info.
 	lvl := parseLogLevel(os.Getenv("LOG_LEVEL"))
-	logger, closeLog := newLogger(lvl)
+	logger, logPath, closeLog := newLogger(lvl)
 	defer closeLog()
+
+	// Stamp the build identity onto EVERY log line. This is deliberately a
+	// base field, not just a one-off startup line: logs rotate and users
+	// paste tails, so a startup-only banner is often missing from what we
+	// actually get handed. With it on every record, any pasted line answers
+	// "which build is this?" — the exact question that stalled diagnosis
+	// before this existed.
+	bi := resolveBuildInfo()
+	logger = logger.With(bi.logFields())
+	logger.Info("cloakline.build", log.Fields{
+		"version":    bi.Version,
+		"commit":     bi.Commit,
+		"build_time": bi.BuildTime,
+		"dirty":      bi.Dirty,
+		"go":         runtime.Version(),
+		"os_arch":    runtime.GOOS + "/" + runtime.GOARCH,
+	})
+	// Tell the operator where the log file lives, on stderr, so it's findable
+	// even when stdout is swallowed by a scheduled task / service wrapper.
+	if logPath != "" {
+		fmt.Fprintf(os.Stderr, "cloakline %s — logging to %s\n", bi.String(), logPath)
+	}
 
 	// Install the OS-native keyring backend for dashboard-managed API
 	// keys. On platforms without native support this is a no-op and
@@ -249,7 +271,7 @@ func run() error {
 		logger.Warn("prefs.open_failed", log.Fields{"error": prefsErr.Error()})
 		prefsStore = nil
 	}
-	adminHandler, err := adminui.New(recorder, "v0.1.0", prefsStore)
+	adminHandler, err := adminui.New(recorder, bi.String(), prefsStore)
 	if err != nil {
 		return fmt.Errorf("adminui: %w", err)
 	}
@@ -326,17 +348,19 @@ func run() error {
 // the daemon is running headless/as a background process — the file is
 // what a user hands to support (or pastes to Claude) when something breaks.
 // Failure to open the file is non-fatal: the daemon still logs to stdout.
-func newLogger(lvl log.Level) (*log.Logger, func()) {
+// The returned path is the log file (empty if only stdout is active) so the
+// caller can point the operator at it.
+func newLogger(lvl log.Level) (*log.Logger, string, func()) {
 	path, err := log.DefaultLogFile()
 	if err != nil {
-		return log.New(lvl), func() {}
+		return log.New(lvl), "", func() {}
 	}
 	f, err := log.OpenFile(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not open log file %s: %v\n", path, err)
-		return log.New(lvl), func() {}
+		return log.New(lvl), "", func() {}
 	}
-	return log.NewMulti(lvl, os.Stdout, f), func() { f.Close() }
+	return log.NewMulti(lvl, os.Stdout, f), path, func() { f.Close() }
 }
 
 func parseLogLevel(s string) log.Level {
