@@ -345,9 +345,13 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Fail-open: remove hosts redirect entries on any exit so a crashed
+	// cloakline never leaves the machine unable to reach the AI providers.
+	defer hostsFailOpen(logger)
+
 	// Optional: start the TLS inspection module as a background goroutine.
 	if ir.Inspect.Enabled {
-		if err := startInspect(ctx, ir, dlpActions, prefsStore, logger, adminHandler, notifier); err != nil {
+		if err := startInspect(ctx, cancel, ir, dlpActions, prefsStore, logger, adminHandler, notifier); err != nil {
 			return fmt.Errorf("tlsinspect: %w", err)
 		}
 	}
@@ -434,6 +438,7 @@ func buildSSRFPolicy(ir *config.IR) httpclient.Policy {
 //     and calls handler.OptOutSession(sessionKey) to grant the opt-out.
 func startInspect(
 	ctx context.Context,
+	cancel context.CancelFunc,
 	ir *config.IR,
 	actions dlptier1.ActionMap,
 	prefsStore *prefs.Store,
@@ -491,6 +496,14 @@ func startInspect(
 		return err
 	}
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("tlsinspect.panic", log.Fields{"panic": fmt.Sprintf("%v", r)})
+			}
+			// Signal the main goroutine to shut down (and run its deferred
+			// hostsFailOpen) whether the TLS listener exited cleanly or crashed.
+			cancel()
+		}()
 		if err := srv.Serve(ctx); err != nil {
 			logger.Error("tlsinspect.exited", log.Fields{"err": err.Error()})
 		}
@@ -538,6 +551,53 @@ func hostsFilePath() string {
 		return filepath.Join(root, "System32", "drivers", "etc", "hosts")
 	}
 	return "/etc/hosts"
+}
+
+// hostsFailOpen removes cloakline's redirect entries from the OS hosts file.
+// Registered as a deferred call in run() so any exit — clean shutdown, error
+// return, or panic unwind — leaves the machine able to reach AI providers
+// directly rather than hitting a dead 127.0.0.1.
+func hostsFailOpen(logger *log.Logger) {
+	targets := []string{
+		"127.0.0.1 api.anthropic.com",
+		"127.0.0.1 api.openai.com",
+	}
+	path := hostsFilePath()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("failopen.read_failed", log.Fields{"err": err.Error()})
+		}
+		return
+	}
+	lines := strings.Split(string(raw), "\n")
+	filtered := lines[:0]
+	removed := 0
+	for _, line := range lines {
+		keep := true
+		for _, t := range targets {
+			if strings.Contains(line, t) {
+				keep = false
+				removed++
+				break
+			}
+		}
+		if keep {
+			filtered = append(filtered, line)
+		}
+	}
+	if removed == 0 {
+		return
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(filtered, "\n")), 0644); err != nil {
+		if logger != nil {
+			logger.Warn("failopen.write_failed", log.Fields{"err": err.Error()})
+		}
+		return
+	}
+	if logger != nil {
+		logger.Info("failopen.hosts_cleaned", log.Fields{"removed": removed})
+	}
 }
 
 // adminListenBase turns ir.AdminListen (":4001" or "127.0.0.1:4001")
