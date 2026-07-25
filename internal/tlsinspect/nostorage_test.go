@@ -80,6 +80,7 @@ func TestNonChatEndpointsPassThroughUnscanned(t *testing.T) {
 		DLPActions: fakeActionResolver{},
 	})
 	h.forwardClient = upstream.Client()
+	h.passthroughClient = upstream.Client()
 
 	// A body that would score above the injection threshold if scanned:
 	// contains "ignore previous instructions" + "reveal system prompt".

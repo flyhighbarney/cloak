@@ -203,6 +203,35 @@ func (b *bootstrapResolver) queryOne(ctx context.Context, server, host string) (
 	return "", 0, fmt.Errorf("%s: no A record for %s", server, host)
 }
 
+// newPassthroughTransport builds the http.Transport used by the passthrough
+// path (non-chat endpoints: auth, token refresh, model listing, telemetry).
+// Connection pooling is intentionally disabled — DisableKeepAlives forces a
+// fresh TLS handshake per request, eliminating the class of "bad record MAC"
+// errors that occur when a pooled connection is reused after the remote peer
+// has already closed it. Auth endpoints are infrequent so the extra RTT cost
+// is negligible compared to the reliability win.
+func newPassthroughTransport(resolver *bootstrapResolver) *http.Transport {
+	base := &net.Dialer{
+		Timeout: 10 * time.Second,
+	}
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			ip, err := resolver.resolve(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			return base.DialContext(ctx, network, net.JoinHostPort(ip, port))
+		},
+		DisableKeepAlives:   true,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+}
+
 // newForwardTransport builds the http.Transport used by the forward path.
 // Its DialContext resolves the destination host through the bootstrap
 // resolver (hosts-file-free) and dials the resulting real IP, so cloakline

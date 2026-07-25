@@ -45,7 +45,14 @@ type Handler struct {
 	logger        *log.Logger
 	meter         MeterFacade
 	forwardClient *http.Client
-	maxBodyBytes  int64
+	// passthroughClient is used for non-chat endpoints (auth, telemetry, model
+	// listings, etc.). It never pools connections — each request gets a fresh
+	// TLS handshake — so stale pooled connections cannot cause "bad record MAC"
+	// errors on auth refreshes, which Claude Code surfaces as "failed to
+	// authenticate". Chat requests use forwardClient (pooled) for streaming
+	// performance; passthrough requests favour correctness over latency.
+	passthroughClient *http.Client
+	maxBodyBytes      int64
 
 	dlpActions dlpActionResolver // per-kind action policy (config)
 	prefs      prefsSource       // per-kind override (dashboard, runtime)
@@ -166,8 +173,8 @@ func NewHandler(c HandlerConfig) *Handler {
 		dlpActions:   c.DLPActions,
 		prefs:        c.Prefs,
 		confirm:      confirm,
-		flog:         newForwardLogLimiter(10 * time.Second),
-		recorder:     c.Recorder,
+		flog:     newForwardLogLimiter(10 * time.Second),
+		recorder: c.Recorder,
 		forwardClient: &http.Client{
 			Timeout: 120 * time.Second,
 			// Bypass the hosts-file redirect that transparent interception
@@ -176,6 +183,16 @@ func NewHandler(c HandlerConfig) *Handler {
 			// listener (see resolver.go). The bootstrap resolver dials the
 			// real upstream IP instead.
 			Transport: newForwardTransport(newBootstrapResolver()),
+		},
+		// passthroughClient intentionally disables connection pooling.
+		// Non-chat endpoints (OAuth token refresh, model listing, telemetry)
+		// are infrequent but must never fail due to a stale pooled connection
+		// returning "bad record MAC". A fresh TLS handshake per request costs
+		// ~1 RTT but eliminates the entire class of stale-connection errors that
+		// manifest as "failed to authenticate" in Claude Code.
+		passthroughClient: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: newPassthroughTransport(newBootstrapResolver()),
 		},
 	}
 }
@@ -474,7 +491,7 @@ func (h *Handler) forwardPassthrough(w http.ResponseWriter, r *http.Request, hos
 	if len(body) > 0 {
 		req.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 	}
-	resp, err := h.forwardClient.Do(req)
+	resp, err := h.passthroughClient.Do(req)
 	if err != nil {
 		h.logForwardErr("tlsinspect.passthrough_failed", host, r.URL.Path, err)
 		http.Error(w, `{"error":"upstream unreachable"}`, http.StatusBadGateway)
