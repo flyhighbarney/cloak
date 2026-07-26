@@ -142,12 +142,12 @@ func (h *Handler) resolveAction(kind string) string {
 
 // HandlerConfig is the constructor input.
 type HandlerConfig struct {
-	Logger        *log.Logger
-	Meter         MeterFacade
-	MaxBodyBytes  int64
-	DLPActions    dlpActionResolver
-	Prefs         prefsSource // optional; runtime dashboard overrides
-	Recorder      recorderFacade // optional; nil disables dashboard recording
+	Logger       *log.Logger
+	Meter        MeterFacade
+	MaxBodyBytes int64
+	DLPActions   dlpActionResolver
+	Prefs        prefsSource    // optional; runtime dashboard overrides
+	Recorder     recorderFacade // optional; nil disables dashboard recording
 }
 
 // NewHandler assembles a handler.
@@ -169,8 +169,8 @@ func NewHandler(c HandlerConfig) *Handler {
 		dlpActions:   c.DLPActions,
 		prefs:        c.Prefs,
 		confirm:      confirm,
-		flog:     newForwardLogLimiter(10 * time.Second),
-		recorder: c.Recorder,
+		flog:         newForwardLogLimiter(10 * time.Second),
+		recorder:     c.Recorder,
 		forwardClient: &http.Client{
 			Timeout: 120 * time.Second,
 			// Bypass the hosts-file redirect that transparent interception
@@ -187,7 +187,7 @@ func NewHandler(c HandlerConfig) *Handler {
 		// ~1 RTT but eliminates the entire class of stale-connection errors that
 		// manifest as "failed to authenticate" in Claude Code.
 		passthroughClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
 			Transport: newPassthroughTransport(newBootstrapResolver()),
 		},
 	}
@@ -398,13 +398,13 @@ func (h *Handler) record(r *http.Request, host, model string, start time.Time, v
 func isChatEndpoint(path string) bool {
 	p := strings.ToLower(path)
 	switch {
-	case strings.HasPrefix(p, "/v1/messages"):          // Anthropic chat
+	case strings.HasPrefix(p, "/v1/messages"): // Anthropic chat
 		return true
-	case strings.HasPrefix(p, "/v1/chat/completions"):  // OpenAI chat
+	case strings.HasPrefix(p, "/v1/chat/completions"): // OpenAI chat
 		return true
-	case strings.HasPrefix(p, "/v1/completions"):       // OpenAI legacy text-completion
+	case strings.HasPrefix(p, "/v1/completions"): // OpenAI legacy text-completion
 		return true
-	case strings.HasPrefix(p, "/v1/responses"):         // OpenAI new Responses API
+	case strings.HasPrefix(p, "/v1/responses"): // OpenAI new Responses API
 		return true
 	}
 	return false
@@ -717,11 +717,31 @@ func (h *Handler) redactContentField(contentRaw json.RawMessage, detect, session
 // string space — no JSON bytes are involved, so encoding mismatches
 // are impossible. Plaintext of matched values is never stored or logged.
 func (h *Handler) redactDecodedText(text string, detect, sessionOptedOut bool, vault *localVault, st *dlpState) (string, bool) {
-	// Run pattern-based DLP followed by intent-based password detection.
+	// Run pattern-based DLP followed by intent-based label detection.
+	// The label detectors catch credentials whose VALUE has no distinctive
+	// shape — a hand-typed password, a plain-UUID token, a no-separator SSN
+	// — by keying off the label the user wrote ("password:", "api key is",
+	// "ssn:"). Each is tagged with the kind that governs its redaction.
 	scanned := patterns.Scan(text)
 	for _, r := range intent.FindPasswordCandidates(text) {
 		scanned = append(scanned, patterns.Finding{
 			Kind:  api.PIIPassword,
+			Start: r[0],
+			End:   r[1],
+			Text:  text[r[0]:r[1]],
+		})
+	}
+	for _, r := range intent.FindSecretCandidates(text) {
+		scanned = append(scanned, patterns.Finding{
+			Kind:  api.PIIAPIKey,
+			Start: r[0],
+			End:   r[1],
+			Text:  text[r[0]:r[1]],
+		})
+	}
+	for _, r := range intent.FindLabelledSSNCandidates(text) {
+		scanned = append(scanned, patterns.Finding{
+			Kind:  api.PIISSN,
 			Start: r[0],
 			End:   r[1],
 			Text:  text[r[0]:r[1]],

@@ -14,8 +14,8 @@ import (
 
 // Pattern is one detection rule.
 type Pattern struct {
-	Kind     api.PIIKind
-	Regex    *regexp.Regexp
+	Kind  api.PIIKind
+	Regex *regexp.Regexp
 	// Validate runs an extra check on the matched substring; if nil, the
 	// regex match is accepted as-is.
 	Validate func(string) bool
@@ -28,6 +28,9 @@ func All() []Pattern {
 	return []Pattern{
 		// High-tier (credential-shaped) — one-way redact.
 		{Kind: api.PIIAPIKey, Regex: reGenericAPIKey},
+		{Kind: api.PIIAPIKey, Regex: reGoogleAPIKey},
+		{Kind: api.PIIAPIKey, Regex: reSlackToken},
+		{Kind: api.PIIAPIKey, Regex: reJWT},
 		{Kind: api.PIIAWSKey, Regex: reAWSKey},
 		{Kind: api.PIIGitHubToken, Regex: reGitHubToken},
 		{Kind: api.PIIPrivateKey, Regex: rePrivateKeyHeader},
@@ -47,10 +50,23 @@ func All() []Pattern {
 }
 
 var (
-	reSSN              = regexp.MustCompile(`\b\d{3}-\d{2}-\d{4}\b`)
-	reCC               = regexp.MustCompile(`\b(?:\d[ -]?){13,19}\b`)
-	reEmail            = regexp.MustCompile(`\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,24}\b`)
-	reGenericAPIKey    = regexp.MustCompile(`\b(?:sk|pk|api[_-]?key|token|secret)[_-][A-Za-z0-9\-]{16,64}\b`)
+	// SSN: dash- OR space-separated (123-45-6789 / 123 45 6789). A separator
+	// is required — a bare 9-digit run is too ambiguous to match unlabelled;
+	// the labelled no-separator case ("ssn: 123456789") is caught by the
+	// intent package's label detector instead.
+	reSSN   = regexp.MustCompile(`\b\d{3}[- ]\d{2}[- ]\d{4}\b`)
+	reCC    = regexp.MustCompile(`\b(?:\d[ -]?){13,19}\b`)
+	reEmail = regexp.MustCompile(`\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,24}\b`)
+	// Generic prefixed key. The value class now includes '_' so Stripe-style
+	// keys (sk_live_..., pk_test_...) and other underscore-bearing tokens are
+	// captured — previously the class stopped at the first underscore.
+	reGenericAPIKey = regexp.MustCompile(`\b(?:sk|pk|api[_-]?key|token|secret)[_-][A-Za-z0-9_\-]{16,64}\b`)
+	// Google API keys: fixed "AIza" prefix + 35 url-safe chars.
+	reGoogleAPIKey = regexp.MustCompile(`\bAIza[0-9A-Za-z_\-]{35}\b`)
+	// Slack tokens: xoxb-/xoxp-/xoxa-/xoxr-/xoxs- followed by long segments.
+	reSlackToken = regexp.MustCompile(`\bxox[baprs]-[0-9A-Za-z\-]{10,}`)
+	// JWT: three base64url segments separated by dots (header.payload.sig).
+	reJWT              = regexp.MustCompile(`\beyJ[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]{5,}\.[A-Za-z0-9_\-]{5,}\b`)
 	reAWSKey           = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
 	reGitHubToken      = regexp.MustCompile(`\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}\b`)
 	rePrivateKeyHeader = regexp.MustCompile(`-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----`)
