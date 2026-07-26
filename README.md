@@ -25,8 +25,8 @@ npx cloakline dashboard           # open admin UI in browser
 **Build-from-source path (for developers):**
 
 ```bash
-git clone https://github.com/flyhighbarney/cloakline.git
-cd cloakline
+git clone https://github.com/flyhighbarney/cloak.git
+cd cloak
 ```
 
 Then, on **Windows CMD**:
@@ -117,8 +117,8 @@ Open source under Apache 2.0. Read the [threat model](docs/threat-model.md). Run
 ### For a developer trying it locally
 
 ```bash
-git clone https://github.com/flyhighbarney/cloakline.git
-cd cloakline
+git clone https://github.com/flyhighbarney/cloak.git
+cd cloak
 export OPENAI_API_KEY=sk-your-real-openai-key
 go run ./cmd/cloakline --config ./configs
 ```
@@ -237,10 +237,10 @@ This is a deliberate architectural constraint. When you outgrow it, [`docs/tripw
 
 ## License
 
-Apache 2.0. Use it, fork it, sell services on it. See [`LICENSE`](LICENSE) *(add before flipping public)*.
+Apache 2.0. Use it, fork it, sell services on it. See [`LICENSE`](LICENSE).
 
 ---
 
 ## Contact
 
-Open an issue in this repo. For anything security-sensitive, write to the address in `SECURITY.md` *(add before flipping public)*.
+Open an issue in this repo. For anything security-sensitive, write to the address in [`SECURITY.md`](SECURITY.md).
