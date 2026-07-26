@@ -93,6 +93,109 @@ func TestLooksIntentionalBoundsSafe(t *testing.T) {
 	}
 }
 
+func TestFindPasswordCandidatesFlexibleForms(t *testing.T) {
+	// Delimiters and label variants people actually type.
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"pwd: hunter2", "hunter2"},
+		{"my pwd is s3cretPass", "s3cretPass"},
+		{"password = topSecret9", "topSecret9"},
+		{"pass -> letmein1", "letmein1"},
+		{"passcode => 8842aa", "8842aa"},
+		{"PWORD: MyP@ss1", "MyP@ss1"},
+	}
+	for _, c := range cases {
+		t.Run(c.text, func(t *testing.T) {
+			got := FindPasswordCandidates(c.text)
+			if len(got) == 0 {
+				t.Fatalf("expected a candidate in %q, got none", c.text)
+			}
+			if v := c.text[got[0][0]:got[0][1]]; v != c.want {
+				t.Errorf("got %q, want %q", v, c.want)
+			}
+		})
+	}
+}
+
+func TestFindSecretCandidates(t *testing.T) {
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"api key: 8f3a9c2d4e5b6071", "8f3a9c2d4e5b6071"},
+		{"my api_key is abc123def456", "abc123def456"},
+		{"token = ghp_aBc12345Xyz", "ghp_aBc12345Xyz"},
+		{"the access token is 9a8b7c6d5e", "9a8b7c6d5e"},
+		{"client secret: s3cr3t-value-99", "s3cr3t-value-99"},
+		{"Authorization: Bearer eyJhbGcitoken123", "eyJhbGcitoken123"},
+	}
+	for _, c := range cases {
+		t.Run(c.text, func(t *testing.T) {
+			got := FindSecretCandidates(c.text)
+			if len(got) == 0 {
+				t.Fatalf("expected a secret candidate in %q, got none", c.text)
+			}
+			found := false
+			for _, r := range got {
+				if c.text[r[0]:r[1]] == c.want {
+					found = true
+				}
+			}
+			if !found {
+				var vals []string
+				for _, r := range got {
+					vals = append(vals, c.text[r[0]:r[1]])
+				}
+				t.Errorf("want %q among candidates, got %v", c.want, vals)
+			}
+		})
+	}
+}
+
+func TestFindSecretCandidatesRejectsProse(t *testing.T) {
+	// Natural sentences that mention a secret label but no real value.
+	cases := []string{
+		"the token is invalid so please retry",
+		"my api key is broken again today",
+		"the secret is that nobody knows",
+	}
+	for _, text := range cases {
+		t.Run(text, func(t *testing.T) {
+			if got := FindSecretCandidates(text); len(got) != 0 {
+				var vals []string
+				for _, r := range got {
+					vals = append(vals, text[r[0]:r[1]])
+				}
+				t.Errorf("expected no candidates in prose %q, got %v", text, vals)
+			}
+		})
+	}
+}
+
+func TestFindLabelledSSNCandidates(t *testing.T) {
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"ssn: 123456789", "123456789"},
+		{"my SSN is 123-45-6789", "123-45-6789"},
+		{"social security number 123 45 6789", "123 45 6789"},
+	}
+	for _, c := range cases {
+		t.Run(c.text, func(t *testing.T) {
+			got := FindLabelledSSNCandidates(c.text)
+			if len(got) == 0 {
+				t.Fatalf("expected an SSN candidate in %q, got none", c.text)
+			}
+			if v := c.text[got[0][0]:got[0][1]]; v != c.want {
+				t.Errorf("got %q, want %q", v, c.want)
+			}
+		})
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
