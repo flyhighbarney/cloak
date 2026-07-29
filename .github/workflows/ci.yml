@@ -13,13 +13,20 @@ jobs:
   test:
     name: Test + Vet + Race
     runs-on: ubuntu-latest
+    # The Go module lives in cloakline/, not at the repository root. Workflows
+    # themselves must stay at the root — GitHub Actions only reads
+    # .github/workflows/ from there, and moving them into the project directory
+    # silently stops every workflow from running at all.
+    defaults:
+      run:
+        working-directory: cloakline
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: cloakline/go.mod
           cache: true
 
       - name: Verify go.mod is tidy
@@ -39,6 +46,13 @@ jobs:
   build:
     name: Build binaries
     runs-on: ubuntu-latest
+    # The Go module lives in cloakline/, not at the repository root. Workflows
+    # themselves must stay at the root — GitHub Actions only reads
+    # .github/workflows/ from there, and moving them into the project directory
+    # silently stops every workflow from running at all.
+    defaults:
+      run:
+        working-directory: cloakline
     needs: test
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +60,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: cloakline/go.mod
           cache: true
 
       - name: Build cloakline daemon
@@ -63,12 +77,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binaries
-          path: bin/
+          # `path` is resolved from the workspace root, unlike `run` steps, so
+          # working-directory does not apply to it.
+          path: cloakline/bin/
           retention-days: 7
 
   secret-audit:
     name: Log-leak audit
     runs-on: ubuntu-latest
+    # The Go module lives in cloakline/, not at the repository root. Workflows
+    # themselves must stay at the root — GitHub Actions only reads
+    # .github/workflows/ from there, and moving them into the project directory
+    # silently stops every workflow from running at all.
+    defaults:
+      run:
+        working-directory: cloakline
     steps:
       - uses: actions/checkout@v4
 
@@ -110,13 +133,20 @@ jobs:
   vuln-scan:
     name: govulncheck
     runs-on: ubuntu-latest
+    # The Go module lives in cloakline/, not at the repository root. Workflows
+    # themselves must stay at the root — GitHub Actions only reads
+    # .github/workflows/ from there, and moving them into the project directory
+    # silently stops every workflow from running at all.
+    defaults:
+      run:
+        working-directory: cloakline
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: cloakline/go.mod
           cache: true
 
       - name: Run govulncheck

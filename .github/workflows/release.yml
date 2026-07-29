@@ -11,6 +11,13 @@ jobs:
   build:
     name: Build ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ubuntu-latest
+    # The Go module lives in cloakline/, not at the repository root. The workflow
+    # file itself has to stay at the root: GitHub Actions only reads
+    # .github/workflows/ from there, so a workflow moved into the project
+    # directory does not fail — it silently never runs.
+    defaults:
+      run:
+        working-directory: cloakline
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +46,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: cloakline/go.mod
           cache: true
 
       - name: Build cloak(line)
@@ -91,9 +98,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.platform }}-${{ matrix.arch }}
+          # Resolved from the workspace root, unlike `run` steps — the archives
+          # are written in cloakline/ because that is the working directory.
           path: |
-            cloakline-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.archive }}
-            cloakline-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.archive }}.sha256
+            cloakline/cloakline-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.archive }}
+            cloakline/cloakline-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.archive }}.sha256
           retention-days: 30
 
   release:
