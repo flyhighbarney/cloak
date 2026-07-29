@@ -21,6 +21,15 @@ coverage.out
 coverage.html
 *.prof
 
+# Release archives. These are built by .github/workflows/release.yml and attached
+# to the GitHub release — they must never be committed. One 17.5 MB zip reached
+# this repository by way of `git add -A`, and a binary in git history is
+# permanent: every clone pays for it forever, whether or not the file is later
+# deleted.
+*.zip
+*.tar.gz
+*.sha256
+
 # Docker / Compose local state
 caddy_data/
 caddy_config/
