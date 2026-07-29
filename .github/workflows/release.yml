@@ -128,3 +128,12 @@ jobs:
           files: artifacts/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+          # Any tag carrying a pre-release suffix must be published as a
+          # prerelease. This is not cosmetic: npm/lib/install.js defaults to
+          # resolving GitHub's releases/latest endpoint, and that endpoint
+          # excludes prereleases but nothing else. A candidate published as a
+          # normal release therefore becomes what `npx cloakline` installs.
+          #
+          # Found by tagging v0.2.2-rc1 to test this workflow — it published
+          # green, and promptly became the latest release ahead of v0.2.1.
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
