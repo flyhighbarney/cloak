@@ -1,46 +1,11 @@
-# Secrets — never commit
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-*_rsa
-*_ed25519
-*.pfx
-credentials.json
+# This repository holds one project, cloakline/. Other projects live alongside it
+# in the same directory but are separate repositories with their own history and
+# remotes — listed here so they do not show up as untracked noise.
+#
+#   wiretype/  -> github.com/flyhighbarney/wiretype
+#   redflag/   -> its own checkout
+wiretype/
+redflag/
 
-# Build output
-/bin/
-/dist/
-/out/
-/policyd
-/policyd.exe
-*.exe
-*.test
-coverage.out
-coverage.html
-*.prof
-
-# Docker / Compose local state
-caddy_data/
-caddy_config/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS junk
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Logs
-*.log
-logs/
-
-# Go tooling
-vendor/
-logs-sample.md
+# Local agent configuration, not part of the project.
+.claude/

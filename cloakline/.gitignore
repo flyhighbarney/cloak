@@ -1,0 +1,46 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*_rsa
+*_ed25519
+*.pfx
+credentials.json
+
+# Build output
+/bin/
+/dist/
+/out/
+/policyd
+/policyd.exe
+*.exe
+*.test
+coverage.out
+coverage.html
+*.prof
+
+# Docker / Compose local state
+caddy_data/
+caddy_config/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Go tooling
+vendor/
+logs-sample.md
